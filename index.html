@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maple Stat Equivalence Parser</title>
+<style>
+  :root {
+    --bg:          #0f1117;
+    --surface:     #1a1d27;
+    --surface2:    #21253a;
+    --border:      #2a2d3a;
+    --accent:      #7c6af7;
+    --accent-dim:  #3d3570;
+    --text:        #e2e4ef;
+    --text-muted:  #6b6f8a;
+    --green:       #4ade80;
+    --red:         #f87171;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { display: flex; flex-direction: column; }
+
+  /* ── toolbar ── */
+  .toolbar {
+    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-bottom: 1px solid var(--border);
+  }
+
+  .toolbar-title { font-size: 13px; font-weight: 600; white-space: nowrap; margin-right: 4px; }
+
+  /* class autocomplete wrapper */
+  .autocomplete-wrap { position: relative; }
+
+  .class-input {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 6px; font-size: 13px; font-family: var(--sans);
+    outline: none; width: 200px; transition: border-color 0.12s;
+  }
+  .class-input:focus { border-color: var(--accent); }
+  .class-input::placeholder { color: var(--text-muted); }
+
+  .autocomplete-drop {
+    display: none;
+    position: absolute; top: calc(100% + 4px); left: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 7px; min-width: 200px; max-height: 220px;
+    overflow-y: auto; z-index: 100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .autocomplete-drop.open { display: block; }
+
+  .ac-item {
+    padding: 7px 12px; font-size: 13px; cursor: pointer;
+    color: var(--text); transition: background 0.08s;
+    white-space: nowrap;
+  }
+  .ac-item:hover, .ac-item.focused { background: var(--surface2); }
+  .ac-item.focused { color: var(--accent); }
+
+  .stat-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: var(--accent-dim); color: var(--accent);
+    font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+
+  button {
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    padding: 5px 14px; border-radius: 6px; border: none;
+    cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
+  }
+  button:hover { opacity: 0.82; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-ghost   { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
+  .btn-copy    { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
+  .btn-copy.copied { color: var(--green); border-color: var(--green); }
+
+  .spacer { flex: 1; }
+
+  .error-inline { font-size: 12px; font-family: var(--mono); color: var(--red); display: none; }
+  .error-inline.visible { display: block; }
+
+  /* ── body layout: left col (raw+json) | right col (table) ── */
+  .body {
+    flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0;
+  }
+
+  .left-col {
+    display: grid; grid-template-rows: 1fr 1fr;
+    border-right: 1px solid var(--border); min-height: 0;
+  }
+
+  .panel { display: flex; flex-direction: column; padding: 10px 14px; min-height: 0; }
+  .panel + .panel { border-top: 1px solid var(--border); }
+
+  .panel-label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.07em; font-weight: 600; margin-bottom: 6px; flex-shrink: 0;
+  }
+
+  textarea {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.65;
+    padding: 12px 14px; border-radius: 8px; resize: none; outline: none;
+    tab-size: 2; transition: border-color 0.15s; min-height: 0;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--text-muted); }
+
+  /* ── equivalence table ── */
+  .right-col { display: flex; flex-direction: column; min-height: 0; }
+
+  .col-header {
+    flex-shrink: 0; padding: 10px 14px 8px; border-bottom: 1px solid var(--border);
+  }
+
+  .table-scroll { flex: 1; overflow-y: auto; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+  thead th {
+    position: sticky; top: 0; background: var(--bg);
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 600;
+    padding: 8px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  thead th.r { text-align: right; }
+
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.08s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+
+  td { padding: 5px 14px; }
+  td.stat-name { font-family: var(--sans); font-size: 12.5px; }
+  td.qty-cell  { width: 76px; }
+
+  .row-qty {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 12px; padding: 3px 6px;
+    border-radius: 5px; outline: none; width: 68px; text-align: right;
+    transition: border-color 0.12s;
+  }
+  .row-qty:focus { border-color: var(--accent); }
+
+  td.equiv-val {
+    text-align: right; font-weight: 600; color: var(--accent);
+    font-family: var(--mono); font-size: 12.5px;
+  }
+
+  .empty-state {
+    padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="toolbar-title">🍁 Maple Stat Equivalence Parser</span>
+
+  <!-- class autocomplete -->
+  <div class="autocomplete-wrap">
+    <input
+      class="class-input" id="classInput"
+      type="text" placeholder="Class…" autocomplete="off"
+      oninput="onClassInput()"
+      onkeydown="onClassKey(event)"
+      onfocus="openDrop()"
+    >
+    <div class="autocomplete-drop" id="acDrop"></div>
+  </div>
+  <span class="stat-badge" id="statBadge" style="display:none"></span>
+
+  <div class="divider"></div>
+
+  <button class="btn-primary" onclick="runParse()">Parse →</button>
+  <button class="btn-ghost"   onclick="clearAll()">Clear</button>
+
+  <span class="error-inline" id="errorBar"></span>
+
+  <div class="spacer"></div>
+  <button class="btn-copy" id="copyBtn" onclick="copyOutput()">Copy JSON</button>
+</div>
+
+<div class="body">
+  <div class="left-col">
+    <div class="panel">
+      <div class="panel-label">Raw Input</div>
+      <textarea id="inputArea" placeholder="Paste the tab-separated stat weight table here.
+
+항목	Value	Final Damage%
+Boss Damage	40	3.725%
+..."></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-label">JSON Output</div>
+      <textarea id="outputArea" readonly placeholder="Parsed JSON will appear here..."></textarea>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="col-header">
+      <div class="panel-label">Equivalence Table</div>
+    </div>
+    <div class="table-scroll" id="tableWrap">
+      <div class="empty-state">Parse a table to see equivalences</div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { CLASS_NAMES, CLASS_STATS, STAT_TYPES } from "./maple-constants.js";
+import { parse } from "./maple-parser.js";
+
+// ── autocomplete ────────────────────────────────────────────────────────────
+let acIndex   = -1;
+let acMatches = [];
+
+function displayName(key) {
+  return key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function resolvedClass() {
+  // Accept whatever is typed as long as it exactly matches a known key
+  return CLASS_STATS[document.getElementById("classInput").value.trim().toLowerCase().replace(/\s+/g, "_")]
+    ? document.getElementById("classInput").value.trim().toLowerCase().replace(/\s+/g, "_")
+    : null;
+}
+
+window.onClassInput = function () {
+  const q = document.getElementById("classInput").value.trim().toLowerCase().replace(/\s+/g, "_");
+  acMatches = q ? CLASS_NAMES.filter(n => n.includes(q)) : CLASS_NAMES;
+  acIndex = -1;
+  renderDrop();
+  openDrop();
+  updateBadge();
+};
+
+window.openDrop = function () {
+  const q = document.getElementById("classInput").value.trim().toLowerCase().replace(/\s+/g, "_");
+  acMatches = q ? CLASS_NAMES.filter(n => n.includes(q)) : CLASS_NAMES;
+  renderDrop();
+  document.getElementById("acDrop").classList.add("open");
+};
+
+function closeDrop() {
+  document.getElementById("acDrop").classList.remove("open");
+}
+
+function renderDrop() {
+  const drop = document.getElementById("acDrop");
+  drop.innerHTML = acMatches.map((n, i) =>
+    `<div class="ac-item" data-idx="${i}" onmousedown="selectClass('${n}')">${displayName(n)}</div>`
+  ).join("");
+}
+
+window.selectClass = function (name) {
+  document.getElementById("classInput").value = displayName(name);
+  closeDrop();
+  updateBadge();
+};
+
+window.onClassKey = function (e) {
+  const drop = document.getElementById("acDrop");
+  const items = drop.querySelectorAll(".ac-item");
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    acIndex = Math.min(acIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle("focused", i === acIndex));
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    acIndex = Math.max(acIndex - 1, -1);
+    items.forEach((el, i) => el.classList.toggle("focused", i === acIndex));
+  } else if (e.key === "Enter") {
+    if (acIndex >= 0 && acMatches[acIndex]) {
+      selectClass(acMatches[acIndex]);
+    }
+    closeDrop();
+  } else if (e.key === "Escape") {
+    closeDrop();
+  }
+};
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".autocomplete-wrap")) closeDrop();
+});
+
+function updateBadge() {
+  const cls = resolvedClass();
+  const badge = document.getElementById("statBadge");
+  if (cls) {
+    badge.textContent = CLASS_STATS[cls];
+    badge.style.display = "inline-block";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+// ── state ────────────────────────────────────────────────────────────────────
+let parsedRows      = []; // { label, key, perUnit }
+let parsedEquivType = "final_damage";
+
+// ── error ────────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const bar = document.getElementById("errorBar");
+  bar.textContent = "⚠ " + msg;
+  bar.classList.add("visible");
+}
+function clearError() {
+  document.getElementById("errorBar").classList.remove("visible");
+}
+
+// ── parse ────────────────────────────────────────────────────────────────────
+window.runParse = function () {
+  clearError();
+  const raw = document.getElementById("inputArea").value.trim();
+  const cls = resolvedClass();
+
+  if (!raw) { showError("Paste a stat weight table first."); return; }
+  if (!cls)  { showError("Type a valid class name."); return; }
+
+  try {
+    const result = parse(raw, cls);
+    document.getElementById("outputArea").value = JSON.stringify(result, null, 2);
+
+    // Rebuild row cache for table — re-parse raw rows to get per-unit values
+    parsedRows      = buildRows(raw, cls);
+    parsedEquivType = result.equivalence_type;
+    renderTable();
+  } catch (err) {
+    showError(err.message);
+  }
+};
+
+/**
+ * Re-parse raw text into { label, perUnit } rows for the equiv table.
+ * Mirrors the internal parse() logic without normalization.
+ */
+function buildRows(rawText, className) {
+  const statType = CLASS_STATS[className];
+  const lines    = rawText.split("\n").map(l => l.trim()).filter(Boolean);
+  const data     = lines.filter(l =>
+    !l.startsWith("항목") && !l.toLowerCase().startsWith("stat")
+  );
+  return data.map(line => {
+    const parts  = line.split("\t");
+    const label  = parts[0].trim();
+    const value  = parseFloat(parts[1]);
+    const col3   = parseFloat(parts[2].replace("%", ""));
+    return { label, perUnit: col3 / value };
+  }).filter(r => !isNaN(r.perUnit));
+}
+
+// ── table ────────────────────────────────────────────────────────────────────
+window.refreshRow = function (idx) {
+  if (!parsedRows.length) return;
+  const row   = parsedRows[idx];
+  const input = document.getElementById(`qty_${idx}`);
+  const cell  = document.getElementById(`equiv_${idx}`);
+  if (!input || !cell) return;
+  const qty = parseFloat(input.value);
+  const raw = row.perUnit * (isNaN(qty) ? 1 : qty);
+  cell.textContent = parsedEquivType === "final_damage"
+    ? raw.toFixed(4) + "%"
+    : raw.toFixed(4);
+};
+
+function renderTable() {
+  const wrap = document.getElementById("tableWrap");
+  if (!parsedRows.length) {
+    wrap.innerHTML = '<div class="empty-state">Parse a table to see equivalences</div>';
+    return;
+  }
+
+  const colHead = parsedEquivType === "final_damage" ? "FD % equiv" : "Main Stat equiv";
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th>Stat</th>
+        <th class="r">Quantity</th>
+        <th class="r">${colHead}</th>
+      </tr>
+    </thead><tbody>`;
+
+  parsedRows.forEach((row, i) => {
+    const equiv = (row.perUnit * 1).toFixed(4);
+    const display = parsedEquivType === "final_damage" ? equiv + "%" : equiv;
+    html += `<tr>
+      <td class="stat-name">${row.label}</td>
+      <td class="qty-cell">
+        <input class="row-qty" id="qty_${i}" type="number" value="1" step="any"
+               oninput="refreshRow(${i})">
+      </td>
+      <td class="equiv-val" id="equiv_${i}">${display}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+// ── utilities ────────────────────────────────────────────────────────────────
+window.clearAll = function () {
+  document.getElementById("inputArea").value  = "";
+  document.getElementById("outputArea").value = "";
+  parsedRows = [];
+  renderTable();
+  clearError();
+};
+
+window.copyOutput = function () {
+  const out = document.getElementById("outputArea").value;
+  if (!out) return;
+  navigator.clipboard.writeText(out).then(() => {
+    const btn = document.getElementById("copyBtn");
+    btn.textContent = "Copied ✓";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "Copy JSON"; btn.classList.remove("copied"); }, 1800);
+  });
+};
+
+// Populate autocomplete on load
+window.onClassInput();
+</script>
+</body>
+</html>
