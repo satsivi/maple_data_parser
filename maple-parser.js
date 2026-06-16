@@ -136,8 +136,9 @@ function validateStatMatch(tableStats, statType) {
 /**
  * Parse a raw MapleStory stat equivalence table into a structured JSON object.
  *
- * Weights are normalized so primary_stat = 1. All other values represent
- * "how much primary stat is this worth per unit?"
+ * Weights are the raw per-unit values: col3 / value for each row.
+ * e.g. for Final Damage%: boss_damage = 3.805% / 40 = 0.095125 FD% per 1 boss damage
+ * e.g. for Main Stat: boss_damage = 9696.96 / 40 = 242.424 main stat per 1 boss damage
  *
  * Validates:
  *   - The third column header must be recognizable as "Final Damage %" or "Main Stat"
@@ -200,20 +201,12 @@ export function parse(rawText, className) {
   }
 
   // --- normalize weights ---
-  const primaryRow = rows.find((r) => r.key === "primary_stat");
-  if (!primaryRow || primaryRow.perUnit === 0) {
-    throw new Error(
-      "Could not find the primary stat row. Verify the class selection matches the pasted table."
-    );
-  }
-  const primaryPerUnit = primaryRow.perUnit;
-
   // First occurrence of each key wins — handles xenon's 3 equal primaries collapsing
   // to primary_stat / primary_stat_pct / flat_unaffected_primary_stat
   const weights = {};
   for (const row of rows) {
     if (!(row.key in weights)) {
-      weights[row.key] = parseFloat((row.perUnit / primaryPerUnit).toFixed(6));
+      weights[row.key] = parseFloat(row.perUnit.toFixed(6));
     }
   }
 
