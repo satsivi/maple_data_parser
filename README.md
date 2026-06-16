@@ -35,19 +35,19 @@ Sample Output
   "stat_type": "hp",
   "equivalence_type": "final_damage",
   "weights": {
-    "boss_damage": 237.8125,
-    "attack": 39.916667,
-    "attack_pct": 746.875,
-    "critical_damage": 805.625,
-    "ied_300": 26.75,
-    "ied_380": 33.9375,
-    "primary_stat": 1,
-    "primary_stat_pct": 152.291667,
-    "flat_unaffected_primary_stat": 0.075,
-    "secondary_stat": 0.333333,
-    "secondary_stat_pct": 16.25,
-    "flat_unaffected_secondary_stat": 0.325,
-    "all_stat_pct": 16.388889
+    "boss_damage": 0.095125,
+    "attack": 0.015967,
+    "attack_pct": 0.29875,
+    "critical_damage": 0.32225,
+    "ied_300": 0.0107,
+    "ied_380": 0.013575,
+    "primary_stat": 0.0004,
+    "primary_stat_pct": 0.060917,
+    "flat_unaffected_primary_stat": 0.00003,
+    "secondary_stat": 0.000133,
+    "secondary_stat_pct": 0.0065,
+    "flat_unaffected_secondary_stat": 0.00013,
+    "all_stat_pct": 0.006556
   }
 }
 ```
