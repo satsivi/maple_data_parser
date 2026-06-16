@@ -16,9 +16,11 @@ import { CLASS_STATS, STAT_TYPES } from "./maple-constants.js";
 const STAT_ABBRS = ["STR", "DEX", "INT", "LUK", "HP"];
 
 /**
- * Detect whether the pasted table is "Final Damage %" or "Main Stat"
- * by reading the third column header. Falls back to "final_damage" if
- * no header row is found.
+ * Detect the equivalence type from the third column header.
+ * Returns null if no recognizable header is found — caller should error on null.
+ *
+ * @param {string[]} lines
+ * @returns {"final_damage" | "main_stat" | null}
  */
 function detectEquivalenceType(lines) {
   for (const line of lines) {
@@ -28,36 +30,28 @@ function detectEquivalenceType(lines) {
         const col = parts[2].trim().toLowerCase();
         if (col.includes("main"))                             return "main_stat";
         if (col.includes("final") || col.includes("damage")) return "final_damage";
+        // Header row found but 3rd column is unrecognized
+        return null;
       }
     }
   }
-  return "final_damage";
+  // No header row at all — also unrecognized
+  return null;
 }
 
 /**
  * Map a raw row label to a canonical weight key.
  *
- * Stat hierarchy per class:
- *   - main[0]      -> primary
- *   - secondary[0] -> secondary  (if exists)
- *   - secondary[1] -> tertiary   (melee_thief only: STR)
- *   - main[1]      -> secondary  (xenon: DEX)
- *   - main[2]      -> tertiary   (xenon: LUK)
+ * Stat hierarchy (ordered):
+ *   most classes:  main=[X],         secondary=[Y]       -> primary, secondary
+ *   melee_thief:   main=[LUK],       secondary=[DEX,STR] -> primary, secondary, tertiary
+ *   xenon:         main=[STR,DEX,LUK], secondary=[]      -> primary, secondary, tertiary
  *
- * Downstream consumers treat primary=1, secondary=some value, tertiary=some value,
- * and can assume tertiary is null if not present in the output.
+ * Tertiary keys are omitted for all other classes; consumers treat missing = null.
  */
 function canonicalKey(label, statType) {
   const { main, secondary } = STAT_TYPES[statType];
-
-  // Resolve ordered stat roles: [primary, secondary, tertiary]
-  // For most classes: main=[X], secondary=[Y] -> [X, Y]
-  // For melee_thief:  main=[LUK], secondary=[DEX, STR] -> [LUK, DEX, STR]
-  // For xenon:        main=[STR, DEX, LUK], secondary=[] -> [STR, DEX, LUK]
-  const [primaryStat, secondaryStat, tertiaryStat] = [
-    ...main,
-    ...secondary,
-  ];
+  const [primaryStat, secondaryStat, tertiaryStat] = [...main, ...secondary];
 
   const roleOf = (abbr) => {
     if (abbr === primaryStat)   return "primary";
@@ -79,13 +73,12 @@ function canonicalKey(label, statType) {
   for (const abbr of STAT_ABBRS) {
     const role = roleOf(abbr);
     if (!role) continue;
-
     if (label === abbr)                        return `${role}_stat`;
     if (label === `${abbr}%`)                  return `${role}_stat_pct`;
     if (label === `Not Affected by % ${abbr}`) return `flat_unaffected_${role}_stat`;
   }
 
-  // Fallback: generic slug for anything unrecognized
+  // Fallback slug for unrecognized rows
   return label
     .replace(/\s*\((\d+)\)/g, "_$1")
     .replace(/\s+/g, "_")
@@ -93,6 +86,47 @@ function canonicalKey(label, statType) {
     .replace(/Not_Affected_by_%_/i, "flat_")
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, "");
+}
+
+/**
+ * Extract which bare stat abbreviations appear as row labels in the table
+ * (i.e. "STR", "DEX", "LUK" etc. — not "STR%" or "Not Affected by % STR").
+ * Used to validate that the pasted table matches the selected class.
+ *
+ * @param {string[]} dataLines - Header-stripped data rows
+ * @returns {string[]} e.g. ["LUK", "DEX", "STR"]
+ */
+function extractTableStats(dataLines) {
+  return dataLines
+    .map((l) => l.split("\t")[0]?.trim())
+    .filter((label) => STAT_ABBRS.includes(label));
+}
+
+/**
+ * Validate that the stats found in the table match the expected stats for the class.
+ * Expected = all of main + secondary, in any order.
+ *
+ * @param {string[]} tableStats  - Stat abbrs found in the pasted table
+ * @param {string}   statType    - Key into STAT_TYPES
+ * @throws {Error} if there is a mismatch
+ */
+function validateStatMatch(tableStats, statType) {
+  const { main, secondary } = STAT_TYPES[statType];
+  const expected = [...main, ...secondary].sort();
+  const found    = [...tableStats].sort();
+
+  const missing = expected.filter((s) => !found.includes(s));
+  const extra   = found.filter((s) => !expected.includes(s));
+
+  if (missing.length > 0 || extra.length > 0) {
+    const parts = [];
+    if (missing.length) parts.push(`expected but not found: ${missing.join(", ")}`);
+    if (extra.length)   parts.push(`found but not expected: ${extra.join(", ")}`);
+    throw new Error(
+      `Stat mismatch for class "${statType}" — ${parts.join("; ")}. ` +
+      `Make sure you selected the right class for this table.`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -105,15 +139,11 @@ function canonicalKey(label, statType) {
  * Weights are normalized so primary_stat = 1. All other values represent
  * "how much primary stat is this worth per unit?"
  *
- * Stat keys used:
- *   primary_stat, primary_stat_pct, flat_unaffected_primary_stat
- *   secondary_stat, secondary_stat_pct, flat_unaffected_secondary_stat
- *   tertiary_stat, tertiary_stat_pct, flat_unaffected_tertiary_stat  (melee_thief + xenon only)
+ * Validates:
+ *   - The third column header must be recognizable as "Final Damage %" or "Main Stat"
+ *   - The stat rows in the table must match the expected stats for the selected class
  *
- * tertiary_* keys are omitted entirely for other classes; consumers should treat
- * a missing tertiary as null.
- *
- * @param {string} rawText    - Full pasted text, tab-separated, may include header row
+ * @param {string} rawText    - Full pasted text, tab-separated, should include header row
  * @param {string} className  - Snake_case class name, e.g. "dual_blade"
  * @returns {{
  *   class: string,
@@ -121,16 +151,25 @@ function canonicalKey(label, statType) {
  *   equivalence_type: "final_damage" | "main_stat",
  *   weights: Record<string, number>
  * }}
- * @throws {Error} on unknown class, malformed input, or missing primary stat row
+ * @throws {Error} on unknown class, unrecognized table format, stat mismatch, or bad input
  */
 export function parse(rawText, className) {
+  // --- validate class ---
   const statType = CLASS_STATS[className];
   if (!statType) {
     throw new Error(`Unknown class: "${className}". Check maple-constants.js for valid names.`);
   }
 
   const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  // --- validate column type ---
   const equivalenceType = detectEquivalenceType(lines);
+  if (equivalenceType === null) {
+    throw new Error(
+      `Unrecognized table format. The third column header must be "Final Damage%" or "Main Stat". ` +
+      `Make sure you are pasting the full table including the header row.`
+    );
+  }
 
   const dataLines = lines.filter(
     (l) => !l.startsWith("\uD56D\uBAA9") && !l.toLowerCase().startsWith("stat")
@@ -140,11 +179,16 @@ export function parse(rawText, className) {
     throw new Error(`Too few data rows (${dataLines.length}). Expected at least 7. Check your paste.`);
   }
 
+  // --- validate stat match ---
+  const tableStats = extractTableStats(dataLines);
+  validateStatMatch(tableStats, statType);
+
+  // --- parse rows ---
   const rows = [];
   for (const line of dataLines) {
     const parts = line.split("\t");
     if (parts.length < 3) {
-      throw new Error(`Could not parse row: "${line}" - expected 3 tab-separated columns.`);
+      throw new Error(`Could not parse row: "${line}" — expected 3 tab-separated columns.`);
     }
     const label = parts[0].trim();
     const value = parseFloat(parts[1].trim());
@@ -155,6 +199,7 @@ export function parse(rawText, className) {
     rows.push({ label, key: canonicalKey(label, statType), value, col3, perUnit: col3 / value });
   }
 
+  // --- normalize weights ---
   const primaryRow = rows.find((r) => r.key === "primary_stat");
   if (!primaryRow || primaryRow.perUnit === 0) {
     throw new Error(
@@ -163,8 +208,8 @@ export function parse(rawText, className) {
   }
   const primaryPerUnit = primaryRow.perUnit;
 
-  // Build weights — first occurrence of each key wins (handles xenon's 3 equal primaries
-  // all collapsing to primary_stat / primary_stat_pct / flat_unaffected_primary_stat)
+  // First occurrence of each key wins — handles xenon's 3 equal primaries collapsing
+  // to primary_stat / primary_stat_pct / flat_unaffected_primary_stat
   const weights = {};
   for (const row of rows) {
     if (!(row.key in weights)) {
