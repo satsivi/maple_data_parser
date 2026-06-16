@@ -19,17 +19,14 @@ const STAT_ABBRS = ["STR", "DEX", "INT", "LUK", "HP"];
  * Detect whether the pasted table is "Final Damage %" or "Main Stat"
  * by reading the third column header. Falls back to "final_damage" if
  * no header row is found.
- *
- * @param {string[]} lines  - Raw lines from the paste, already trimmed
- * @returns {"final_damage" | "main_stat"}
  */
 function detectEquivalenceType(lines) {
   for (const line of lines) {
-    if (line.startsWith("항목") || line.toLowerCase().startsWith("stat")) {
+    if (line.startsWith("\uD56D\uBAA9") || line.toLowerCase().startsWith("stat")) {
       const parts = line.split("\t");
       if (parts.length >= 3) {
         const col = parts[2].trim().toLowerCase();
-        if (col.includes("main"))                       return "main_stat";
+        if (col.includes("main"))                             return "main_stat";
         if (col.includes("final") || col.includes("damage")) return "final_damage";
       }
     }
@@ -38,22 +35,36 @@ function detectEquivalenceType(lines) {
 }
 
 /**
- * Map a raw row label to a canonical weight key, respecting class stat roles.
+ * Map a raw row label to a canonical weight key.
  *
- * Generic rows (Boss Damage, Attack, IED…) get fixed keys.
- * Stat rows (STR, DEX%, Not Affected by % LUK…) are mapped to
- * primary_stat / secondary_stat / flat_unaffected_* based on the class.
+ * Stat hierarchy per class:
+ *   - main[0]      -> primary
+ *   - secondary[0] -> secondary  (if exists)
+ *   - secondary[1] -> tertiary   (melee_thief only: STR)
+ *   - main[1]      -> secondary  (xenon: DEX)
+ *   - main[2]      -> tertiary   (xenon: LUK)
  *
- * For Xenon (3 equal mains), all three raw stats map to primary_stat /
- * primary_stat_pct / flat_unaffected_primary_stat. The parser deduplicates,
- * keeping the first occurrence — all three have the same per-unit value anyway.
- *
- * @param {string}   label    - e.g. "Not Affected by % STR"
- * @param {string}   statType - key into STAT_TYPES, e.g. "melee_thief"
- * @returns {string}          - canonical snake_case key
+ * Downstream consumers treat primary=1, secondary=some value, tertiary=some value,
+ * and can assume tertiary is null if not present in the output.
  */
 function canonicalKey(label, statType) {
   const { main, secondary } = STAT_TYPES[statType];
+
+  // Resolve ordered stat roles: [primary, secondary, tertiary]
+  // For most classes: main=[X], secondary=[Y] -> [X, Y]
+  // For melee_thief:  main=[LUK], secondary=[DEX, STR] -> [LUK, DEX, STR]
+  // For xenon:        main=[STR, DEX, LUK], secondary=[] -> [STR, DEX, LUK]
+  const [primaryStat, secondaryStat, tertiaryStat] = [
+    ...main,
+    ...secondary,
+  ];
+
+  const roleOf = (abbr) => {
+    if (abbr === primaryStat)   return "primary";
+    if (abbr === secondaryStat) return "secondary";
+    if (abbr === tertiaryStat)  return "tertiary";
+    return null;
+  };
 
   switch (label) {
     case "Boss Damage":     return "boss_damage";
@@ -66,27 +77,15 @@ function canonicalKey(label, statType) {
   }
 
   for (const abbr of STAT_ABBRS) {
-    const isMain = main.includes(abbr);
-    const isSec  = secondary.includes(abbr);
+    const role = roleOf(abbr);
+    if (!role) continue;
 
-    if (label === abbr) {
-      if (isMain) return "primary_stat";
-      if (isSec)  return "secondary_stat";
-      return abbr.toLowerCase();
-    }
-    if (label === `${abbr}%`) {
-      if (isMain) return "primary_stat_pct";
-      if (isSec)  return "secondary_stat_pct";
-      return `${abbr.toLowerCase()}_pct`;
-    }
-    if (label === `Not Affected by % ${abbr}`) {
-      if (isMain) return "flat_unaffected_primary_stat";
-      if (isSec)  return "flat_unaffected_secondary_stat";
-      return `flat_unaffected_${abbr.toLowerCase()}`;
-    }
+    if (label === abbr)                        return `${role}_stat`;
+    if (label === `${abbr}%`)                  return `${role}_stat_pct`;
+    if (label === `Not Affected by % ${abbr}`) return `flat_unaffected_${role}_stat`;
   }
 
-  // Fallback: generic slug
+  // Fallback: generic slug for anything unrecognized
   return label
     .replace(/\s*\((\d+)\)/g, "_$1")
     .replace(/\s+/g, "_")
@@ -103,74 +102,59 @@ function canonicalKey(label, statType) {
 /**
  * Parse a raw MapleStory stat equivalence table into a structured JSON object.
  *
- * The weights object is normalized so that 1 primary_stat = 1.000000.
- * Every other stat value is expressed as: "how much primary stat is this worth?"
+ * Weights are normalized so primary_stat = 1. All other values represent
+ * "how much primary stat is this worth per unit?"
  *
- * @param {string} rawText    - The full pasted text, tab-separated, may include header
- * @param {string} className  - Snake_case class name, e.g. "demon_avenger"
+ * Stat keys used:
+ *   primary_stat, primary_stat_pct, flat_unaffected_primary_stat
+ *   secondary_stat, secondary_stat_pct, flat_unaffected_secondary_stat
+ *   tertiary_stat, tertiary_stat_pct, flat_unaffected_tertiary_stat  (melee_thief + xenon only)
+ *
+ * tertiary_* keys are omitted entirely for other classes; consumers should treat
+ * a missing tertiary as null.
+ *
+ * @param {string} rawText    - Full pasted text, tab-separated, may include header row
+ * @param {string} className  - Snake_case class name, e.g. "dual_blade"
  * @returns {{
  *   class: string,
  *   stat_type: string,
  *   equivalence_type: "final_damage" | "main_stat",
  *   weights: Record<string, number>
  * }}
- * @throws {Error} if the class is unknown, the input is malformed, or the
- *                 primary stat row cannot be found
+ * @throws {Error} on unknown class, malformed input, or missing primary stat row
  */
 export function parse(rawText, className) {
-  // --- validate class ---
   const statType = CLASS_STATS[className];
   if (!statType) {
     throw new Error(`Unknown class: "${className}". Check maple-constants.js for valid names.`);
   }
 
-  // --- split and strip header ---
-  const lines = rawText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
+  const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
   const equivalenceType = detectEquivalenceType(lines);
 
   const dataLines = lines.filter(
-    (l) => !l.startsWith("항목") && !l.toLowerCase().startsWith("stat")
+    (l) => !l.startsWith("\uD56D\uBAA9") && !l.toLowerCase().startsWith("stat")
   );
 
   if (dataLines.length < 7) {
-    throw new Error(
-      `Too few data rows (${dataLines.length}). Expected at least 7. Check your paste.`
-    );
+    throw new Error(`Too few data rows (${dataLines.length}). Expected at least 7. Check your paste.`);
   }
 
-  // --- parse each row ---
   const rows = [];
   for (const line of dataLines) {
     const parts = line.split("\t");
     if (parts.length < 3) {
-      throw new Error(
-        `Could not parse row: "${line}" — expected 3 tab-separated columns.`
-      );
+      throw new Error(`Could not parse row: "${line}" - expected 3 tab-separated columns.`);
     }
-
-    const label   = parts[0].trim();
-    const value   = parseFloat(parts[1].trim());
-    // Third column is either "3.725%" (FD) or "9696.96" (main stat) — strip % if present
-    const col3    = parseFloat(parts[2].trim().replace("%", ""));
-
+    const label = parts[0].trim();
+    const value = parseFloat(parts[1].trim());
+    const col3  = parseFloat(parts[2].trim().replace("%", ""));
     if (isNaN(value) || isNaN(col3)) {
       throw new Error(`Invalid numbers in row: "${line}"`);
     }
-
-    rows.push({
-      label,
-      key: canonicalKey(label, statType),
-      value,
-      col3,
-      perUnit: col3 / value,
-    });
+    rows.push({ label, key: canonicalKey(label, statType), value, col3, perUnit: col3 / value });
   }
 
-  // --- find primary stat per-unit for normalization ---
   const primaryRow = rows.find((r) => r.key === "primary_stat");
   if (!primaryRow || primaryRow.perUnit === 0) {
     throw new Error(
@@ -179,7 +163,8 @@ export function parse(rawText, className) {
   }
   const primaryPerUnit = primaryRow.perUnit;
 
-  // --- build normalized weights, deduplicate canonical keys (first wins) ---
+  // Build weights — first occurrence of each key wins (handles xenon's 3 equal primaries
+  // all collapsing to primary_stat / primary_stat_pct / flat_unaffected_primary_stat)
   const weights = {};
   for (const row of rows) {
     if (!(row.key in weights)) {
@@ -187,10 +172,5 @@ export function parse(rawText, className) {
     }
   }
 
-  return {
-    class:            className,
-    stat_type:        statType,
-    equivalence_type: equivalenceType,
-    weights,
-  };
+  return { class: className, stat_type: statType, equivalence_type: equivalenceType, weights };
 }
