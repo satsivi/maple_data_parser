@@ -4,30 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Maple Stat Equivalence Parser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:          #0f1117;
-    --surface:     #1a1d27;
-    --surface2:    #21253a;
-    --border:      #2a2d3a;
-    --accent:      #7c6af7;
-    --accent-dim:  #3d3570;
-    --text:        #e2e4ef;
-    --text-muted:  #6b6f8a;
-    --green:       #4ade80;
-    --red:         #f87171;
+    --bg:          #17140f;
+    --surface:     #211c15;
+    --surface2:    #2b2419;
+    --border:      #3a3225;
+    --accent:      #e0993d;
+    --accent-dim:  #4a3a1e;
+    --text:        #f0ead9;
+    --text-muted:  #8c8270;
+    --green:       #9bc53d;
+    --red:         #e2543d;
     --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
     --sans: 'Inter', system-ui, sans-serif;
+    --shadow-popover: 0 8px 24px rgba(0,0,0,0.5);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
   body { display: flex; flex-direction: row; }
 
+  /* ── scrollbars ── */
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 20px; }
+  *::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  *::-webkit-scrollbar-corner { background: transparent; }
+
   /* ── toolbar ── */
   .toolbar {
-    flex-shrink: 0; display: flex; align-items: center; gap: 10px;
-    padding: 8px 16px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 10px;
+    padding: 8px 16px; border-bottom: 1px solid var(--border); min-height: 52px;
   }
 
   .toolbar-title { font-size: 13px; font-weight: 600; white-space: nowrap; margin-right: 4px; }
@@ -47,9 +59,9 @@
     display: none;
     position: absolute; top: calc(100% + 4px); left: 0;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 7px; min-width: 200px; max-height: 220px;
+    border-radius: 8px; min-width: 200px; max-height: 220px;
     overflow-y: auto; z-index: 100;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-popover);
   }
   .autocomplete-drop.open { display: block; }
 
@@ -62,7 +74,7 @@
   .ac-item.focused { color: var(--accent); }
 
   .stat-badge {
-    font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    font-size: 10px; padding: 2px 8px; border-radius: 20px;
     background: var(--accent-dim); color: var(--accent);
     font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
     white-space: nowrap;
@@ -76,15 +88,73 @@
     cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
   }
   button:hover { opacity: 0.82; }
-  .btn-primary { background: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #1a1108; }
   .btn-ghost   { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
   .btn-copy    { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
   .btn-copy.copied { color: var(--green); border-color: var(--green); }
 
   .spacer { flex: 1; }
 
-  .error-inline { font-size: 12px; font-family: var(--mono); color: var(--red); display: none; }
+  .error-inline { font-size: 13px; font-family: var(--sans); color: var(--red); display: none; }
   .error-inline.visible { display: block; }
+
+  .status-chip {
+    font-size: 10px; padding: 3px 9px; border-radius: 20px;
+    font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    white-space: nowrap; border: 1px solid var(--border); color: var(--text-muted);
+    background: var(--surface); transition: color 0.12s, border-color 0.12s;
+  }
+  .status-chip.ready { color: var(--green); border-color: var(--green); }
+
+  .help-wrap { position: relative; }
+  .help-btn {
+    width: 20px; height: 20px; border-radius: 50%; padding: 0;
+    background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent);
+    font-family: var(--sans); font-size: 10px; font-weight: 600; line-height: 1;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .help-btn:hover { opacity: 0.82; }
+  .help-popover {
+    display: none; position: absolute; top: calc(100% + 8px); left: 0;
+    width: 340px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; box-shadow: var(--shadow-popover);
+    z-index: 100;
+  }
+  .help-popover.open { display: block; }
+  .help-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    font-weight: 600; color: var(--text-muted); margin-bottom: 8px;
+  }
+  .help-popover ol { padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .help-popover li { font-size: 13px; line-height: 1.5; color: var(--text); }
+  .help-popover strong { color: var(--accent); font-weight: 600; }
+  .help-dismiss {
+    display: flex; align-items: center; gap: 6px; margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--border); font-size: 10px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; cursor: pointer;
+  }
+
+  .hint-banner {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 8px 16px; background: var(--surface2);
+    border-bottom: 1px solid var(--border); color: var(--text-muted);
+  }
+  .hint-banner.hidden { display: none; }
+
+  .no-spinner::-webkit-inner-spin-button,
+  .no-spinner::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .no-spinner { -moz-appearance: textfield; }
+
+  .input-cluster {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 10px; background: var(--surface); border-radius: 8px;
+  }
+  .cluster-label {
+    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.06em; font-weight: 600; white-space: nowrap; margin-right: 2px;
+  }
 
   /* ── body layout: left col (raw+json) | right col (table) ── */
   .body {
@@ -106,7 +176,7 @@
 
   textarea {
     flex: 1; background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.65;
+    color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.65;
     padding: 12px 14px; border-radius: 8px; resize: none; outline: none;
     tab-size: 2; transition: border-color 0.15s; min-height: 0;
   }
@@ -122,7 +192,7 @@
 
   .table-scroll { flex: 1; overflow-y: auto; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
   thead th {
     position: sticky; top: 0; background: var(--bg);
@@ -137,20 +207,21 @@
   tbody tr:hover { background: var(--surface2); }
 
   td { padding: 5px 14px; }
-  td.stat-name { font-family: var(--sans); font-size: 12.5px; }
+  td.stat-name { font-family: var(--sans); font-size: 13px; }
   td.qty-cell  { width: 76px; }
 
   .row-qty {
     background: var(--surface); border: 1px solid var(--border); color: var(--text);
-    font-family: var(--mono); font-size: 12px; padding: 3px 6px;
+    font-family: var(--mono); font-size: 13px; padding: 3px 6px;
     border-radius: 5px; outline: none; width: 68px; text-align: right;
     transition: border-color 0.12s;
   }
   .row-qty:focus { border-color: var(--accent); }
+  .row-qty:disabled { opacity: 0.4; cursor: not-allowed; }
 
   td.equiv-val {
     text-align: right; font-weight: 600; color: var(--accent);
-    font-family: var(--mono); font-size: 12.5px;
+    font-family: var(--mono); font-size: 13px;
   }
 
   .empty-state {
@@ -164,6 +235,11 @@
   }
   .sidebar-title {
     font-size: 13px; font-weight: 600; padding: 0 8px 14px; white-space: nowrap;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .brand-name {
+    font-family: 'Fredoka', var(--sans); font-weight: 700; color: var(--accent);
+    letter-spacing: 0.01em;
   }
   .tab-btn {
     background: transparent; border: none; border-left: 2px solid transparent;
@@ -182,7 +258,11 @@
     outline: none; width: 96px; transition: border-color 0.12s;
   }
   .num-input:focus { border-color: var(--accent); }
-  .input-label { font-size: 11px; color: var(--text-muted); margin-right: 4px; white-space: nowrap; }
+  select.num-input {
+    font-family: var(--sans); text-overflow: ellipsis; white-space: nowrap;
+    overflow: hidden; padding-right: 6px;
+  }
+  .input-label { font-size: 10px; color: var(--text-muted); margin-right: 4px; white-space: nowrap; }
   .event-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
   .event-summary {
     font-size: 13px; color: var(--text); margin-bottom: 14px;
@@ -199,7 +279,7 @@
 <body>
 
 <div class="sidebar">
-  <div class="sidebar-title">🍁 Maple Tools</div>
+  <div class="sidebar-title"><span>🍁</span><span class="brand-name">Mimi's Tools</span></div>
   <button class="tab-btn active" id="tabBtnParser" onclick="showTab('parser')">Stat Parser</button>
   <button class="tab-btn" id="tabBtnEvent" onclick="showTab('event')">Event Optimizer</button>
 </div>
@@ -262,27 +342,55 @@ Boss Damage	40	3.725%
 
 <div class="view" id="eventView" style="display:none">
 <div class="toolbar">
-  <span class="toolbar-title">📅 Event Stat Optimizer</span>
+  <span class="toolbar-title">🍁 Event Stat Optimizer</span>
 
-  <span class="input-label">Event</span>
-  <select class="num-input" id="eventSelect" style="width:160px" onchange="onEventSelect()"></select>
+  <div class="help-wrap">
+    <button class="help-btn" id="helpBtn" onclick="toggleHelp()" aria-label="How to use the Event Optimizer">?</button>
+    <div class="help-popover" id="helpPopover">
+      <div class="help-title">How this works</div>
+      <ol>
+        <li>Load FD data first: on the Stat Parser tab, click the copy button under <strong>FD</strong> in Scouter's Stat Efficiency section, paste it in, and parse.</li>
+        <li>Scouter's export doesn't include <strong>Buff Duration</strong> or <strong>Crit Rate</strong>. Grab those FD values yourself and type them into the matching line's FD weight field.</li>
+        <li>To force a skill to a specific level, set <strong>Reserved Levels</strong> for that line. Add a <strong>Complete by wk</strong> deadline if it needs to hit that level by a certain week.</li>
+      </ol>
+      <label class="help-dismiss">
+        <input type="checkbox" id="helpDontShowAgain" onchange="onHelpDismissToggle()">
+        Don't show this automatically
+      </label>
+    </div>
+  </div>
+
+  <span class="status-chip" id="fdStatusChip">FD data: not loaded</span>
 
   <div class="divider"></div>
 
-  <span class="input-label">Points/claim</span>
-  <input class="num-input" id="pointsPerClaimInput" type="number" min="0" step="any" value="5" style="width:64px">
+  <span class="input-label">Event</span>
+  <select class="num-input" id="eventSelect" style="width:200px" onchange="onEventSelect()"></select>
 
-  <span class="input-label">Max claims/week</span>
-  <input class="num-input" id="maxClaimsPerWeekInput" type="number" min="0" step="any" value="5" style="width:64px">
+  <div class="divider"></div>
 
-  <span class="input-label">Lifetime claim cap</span>
-  <input class="num-input" id="maxLifetimeClaimsInput" type="number" min="0" step="any" value="60">
+  <div class="input-cluster">
+    <span class="cluster-label">Income</span>
+    <span class="input-label">Points/claim</span>
+    <input class="num-input" id="pointsPerClaimInput" type="number" min="0" step="any" value="5" style="width:64px">
 
-  <span class="input-label">Total paid pts</span>
-  <input class="num-input" id="totalPaidPointsInput" type="number" min="0" step="any" value="0">
+    <span class="input-label">Max claims/week</span>
+    <input class="num-input" id="maxClaimsPerWeekInput" type="number" min="0" step="any" value="5" style="width:64px">
 
-  <span class="input-label">Weeks</span>
-  <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="12" style="width:64px">
+    <span class="input-label">Lifetime cap</span>
+    <input class="num-input" id="maxLifetimeClaimsInput" type="number" min="0" step="any" value="60">
+
+    <span class="input-label">Total paid pts</span>
+    <input class="num-input" id="totalPaidPointsInput" type="number" min="0" step="any" value="0">
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="input-cluster">
+    <span class="cluster-label">Session</span>
+    <span class="input-label">Weeks</span>
+    <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="12" style="width:64px">
+  </div>
 
   <div class="divider"></div>
 
@@ -291,6 +399,11 @@ Boss Damage	40	3.725%
   <span class="error-inline" id="eventErrorBar"></span>
 
   <div class="spacer"></div>
+</div>
+
+<div class="hint-banner" id="fdHintBanner">
+  <span>⚠ Load a Final Damage% stat table on the Stat Parser tab first. Event lines seed their FD weights from it.</span>
+  <button class="btn-ghost" onclick="showTab('parser')">Go to Stat Parser →</button>
 </div>
 
 <div class="body">
@@ -336,8 +449,29 @@ window.showTab = function (tab) {
   document.getElementById("eventView").style.display   = isParser ? "none" : "";
   document.getElementById("tabBtnParser").classList.toggle("active", isParser);
   document.getElementById("tabBtnEvent").classList.toggle("active", !isParser);
-  if (!isParser) reseedLinesTable();
+  if (!isParser) {
+    reseedLinesTable();
+    maybeAutoOpenHelp();
+  }
 };
+
+// ── FD data status chip (Event Optimizer tab) ─────────────────────────────────
+function updateFdStatusChip() {
+  const chip = document.getElementById("fdStatusChip");
+  const banner = document.getElementById("fdHintBanner");
+  const ready = !!(lastParsedWeights && parsedEquivType === "final_damage");
+
+  if (chip) {
+    if (ready) {
+      chip.textContent = `FD data loaded: ${displayName(lastParsedClassName)}`;
+      chip.classList.add("ready");
+    } else {
+      chip.textContent = "FD data: not loaded";
+      chip.classList.remove("ready");
+    }
+  }
+  if (banner) banner.classList.toggle("hidden", ready);
+}
 
 // ── autocomplete ────────────────────────────────────────────────────────────
 let acIndex   = -1;
@@ -412,6 +546,33 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".autocomplete-wrap")) closeDrop();
 });
 
+// ── event optimizer help popover ────────────────────────────────────────────
+const HELP_DISMISSED_KEY = "mapleEventHelpDismissed";
+
+function isHelpDismissed() {
+  try { return localStorage.getItem(HELP_DISMISSED_KEY) === "1"; } catch { return false; }
+}
+
+window.toggleHelp = function () {
+  document.getElementById("helpPopover")?.classList.toggle("open");
+};
+
+window.onHelpDismissToggle = function () {
+  const checked = document.getElementById("helpDontShowAgain")?.checked;
+  try { localStorage.setItem(HELP_DISMISSED_KEY, checked ? "1" : "0"); } catch {}
+};
+
+/** Auto-opens the help popover the first time a user visits this tab; stays open on
+ * later visits too unless they've checked "Don't show this automatically". */
+function maybeAutoOpenHelp() {
+  if (isHelpDismissed()) return;
+  document.getElementById("helpPopover")?.classList.add("open");
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".help-wrap")) document.getElementById("helpPopover")?.classList.remove("open");
+});
+
 function updateBadge() {
   const cls = resolvedClass();
   const badge = document.getElementById("statBadge");
@@ -427,6 +588,23 @@ function updateBadge() {
 let parsedRows      = []; // { label, key, perUnit }
 let parsedEquivType = "final_damage";
 let lastParsedWeights = null; // most recent successful parse().weights, shared with Event Optimizer tab
+let lastParsedClassName = null;
+
+// ── persistence: remember the last successful parse across reloads ────────────
+const PARSE_STORAGE_KEY = "mapleParserState";
+
+function saveParserState(cls, raw, result) {
+  try { localStorage.setItem(PARSE_STORAGE_KEY, JSON.stringify({ cls, raw, result })); } catch {}
+}
+function loadParserState() {
+  try {
+    const raw = localStorage.getItem(PARSE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearParserState() {
+  try { localStorage.removeItem(PARSE_STORAGE_KEY); } catch {}
+}
 
 // ── error ────────────────────────────────────────────────────────────────────
 function showError(msg) {
@@ -455,8 +633,11 @@ window.runParse = function () {
     parsedRows      = buildRows(raw, cls);
     parsedEquivType = result.equivalence_type;
     lastParsedWeights = result.weights;
+    lastParsedClassName = cls;
     renderTable();
     reseedLinesTable();
+    updateFdStatusChip();
+    saveParserState(cls, raw, result);
   } catch (err) {
     showError(err.message);
   }
@@ -474,11 +655,12 @@ function buildRows(rawText, className) {
   );
   return data.map(line => {
     const parts  = line.split("\t");
+    if (parts.length < 3) return null; // malformed row — fewer than 3 tab-separated columns
     const label  = parts[0].trim();
     const value  = parseFloat(parts[1]);
     const col3   = parseFloat(parts[2].replace("%", ""));
     return { label, perUnit: col3 / value };
-  }).filter(r => !isNaN(r.perUnit));
+  }).filter(r => r && !isNaN(r.perUnit));
 }
 
 // ── table ────────────────────────────────────────────────────────────────────
@@ -532,11 +714,14 @@ function renderTable() {
 
 // ── utilities ────────────────────────────────────────────────────────────────
 window.clearAll = function () {
-  document.getElementById("inputArea").value  = "";
+  const inputArea = document.getElementById("inputArea");
+  if (inputArea.value.trim() && !confirm("Clear the pasted table and parsed output?")) return;
+  inputArea.value = "";
   document.getElementById("outputArea").value = "";
   parsedRows = [];
   renderTable();
   clearError();
+  clearParserState();
 };
 
 window.copyOutput = function () {
@@ -635,13 +820,13 @@ window.onEventSelect = function () {
       <td class="stat-name">${line.name}</td>
       <td class="stat-name">${statKeyCell}</td>
       <td class="qty-cell">
-        <input class="row-qty" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}">
+        <input class="row-qty no-spinner" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}">
       </td>
       <td class="qty-cell">
-        <input class="row-qty" id="lineReserved_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0">
+        <input class="row-qty" id="lineReserved_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0" oninput="onLineReservedChange(${i})">
       </td>
       <td class="qty-cell">
-        <input class="row-qty" id="lineDeadline_${i}" type="number" min="1" step="1" placeholder="—">
+        <input class="row-qty" id="lineDeadline_${i}" type="number" min="1" step="1" placeholder="—" disabled>
       </td>
     </tr>`;
   });
@@ -661,6 +846,30 @@ window.onLineStatKeyChange = function (i) {
   const seedWeight = seedForLine(line, keys);
   document.getElementById(`lineWeight_${i}`).value = seedWeight;
   lineSeedWeights[line.name] = seedWeight;
+};
+
+/**
+ * A "Complete by wk" deadline only makes sense once levels are reserved for
+ * that line, so the deadline input stays disabled (and clears) until Reserved
+ * Levels is > 0. Also clamps typed input past the line's max level count,
+ * since the HTML `max` attribute only constrains the spinner, not typing.
+ */
+window.onLineReservedChange = function (i) {
+  const eventName = document.getElementById("eventSelect")?.value;
+  const line = eventName ? EVENT_CONFIGS[eventName].lines[i] : null;
+  const reservedInput = document.getElementById(`lineReserved_${i}`);
+  const deadlineInput = document.getElementById(`lineDeadline_${i}`);
+  if (!reservedInput || !deadlineInput) return;
+
+  let reserved = parseInt(reservedInput.value, 10);
+  if (line && !isNaN(reserved) && reserved > line.levels.length) {
+    reserved = line.levels.length;
+    reservedInput.value = reserved;
+  }
+
+  const hasReserved = !isNaN(reserved) && reserved > 0;
+  deadlineInput.disabled = !hasReserved;
+  if (!hasReserved) deadlineInput.value = "";
 };
 
 /**
@@ -708,13 +917,14 @@ window.runOptimize = function () {
   const pointsPerClaim     = parseFloat(document.getElementById("pointsPerClaimInput").value);
   const maxClaimsPerWeek   = parseFloat(document.getElementById("maxClaimsPerWeekInput").value);
   const maxLifetimeClaims  = parseFloat(document.getElementById("maxLifetimeClaimsInput").value);
-  const totalPaidPoints    = parseFloat(document.getElementById("totalPaidPointsInput").value) || 0;
+  const totalPaidPoints    = parseFloat(document.getElementById("totalPaidPointsInput").value);
   const numWeeks           = parseInt(document.getElementById("numWeeksInput").value, 10);
 
   if (!eventName)                 { showEventError("No event configured — check maple-constants/event-configs.json."); return; }
   if (isNaN(pointsPerClaim) || pointsPerClaim < 0)       { showEventError("Enter a valid points/claim."); return; }
   if (isNaN(maxClaimsPerWeek) || maxClaimsPerWeek < 0)   { showEventError("Enter a valid max claims/week."); return; }
   if (isNaN(maxLifetimeClaims) || maxLifetimeClaims < 0) { showEventError("Enter a valid lifetime claim cap."); return; }
+  if (isNaN(totalPaidPoints) || totalPaidPoints < 0)     { showEventError("Enter a valid total paid pts."); return; }
   if (isNaN(numWeeks) || numWeeks < 1)                   { showEventError("Enter a valid number of weeks."); return; }
 
   const maxAllowedPaidPoints = MAX_PAID_POINTS_PER_WEEK * numWeeks;
@@ -850,7 +1060,30 @@ function renderEventResult(result) {
   wrap.innerHTML = html;
 }
 
+// ── restore last successful parse on load ──────────────────────────────────
+try {
+  const savedParserState = loadParserState();
+  if (savedParserState?.cls && CLASS_STATS[savedParserState.cls] && savedParserState?.raw && savedParserState?.result) {
+    document.getElementById("classInput").value = displayName(savedParserState.cls);
+    document.getElementById("inputArea").value  = savedParserState.raw;
+    document.getElementById("outputArea").value = JSON.stringify(savedParserState.result, null, 2);
+    parsedRows           = buildRows(savedParserState.raw, savedParserState.cls);
+    parsedEquivType      = savedParserState.result.equivalence_type;
+    lastParsedWeights    = savedParserState.result.weights;
+    lastParsedClassName  = savedParserState.cls;
+    renderTable();
+  } else if (savedParserState) {
+    clearParserState(); // stale/invalid — e.g. class no longer exists
+  }
+} catch {
+  clearParserState();
+}
+
 populateEventSelect();
+updateFdStatusChip();
+
+const helpDismissCheckbox = document.getElementById("helpDontShowAgain");
+if (helpDismissCheckbox) helpDismissCheckbox.checked = isHelpDismissed();
 
 // Populate autocomplete on load
 window.onClassInput();

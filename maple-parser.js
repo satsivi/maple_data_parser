@@ -63,7 +63,9 @@ function canonicalKey(label, statType) {
   switch (label) {
     case "Boss Damage":     return "boss_damage";
     case "Attack":          return "attack";
+    case "M.Attack":        return "attack"; // magic attack — INT classes' equivalent of weapon Attack
     case "Attack%":         return "attack_pct";
+    case "M.Attack%":       return "attack_pct";
     case "Critical Dmg":    return "critical_damage";
     case "Ignore Dff(300)": return "ied_300";
     case "Ignore Dff(380)": return "ied_380";
