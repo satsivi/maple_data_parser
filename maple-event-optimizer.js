@@ -78,23 +78,28 @@ function buildPrefixSums(steps, fdPerUnit) {
  *
  * @param {Array<{ name: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
  * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
- * @param {number} totalBudget - integer currency budget
+ * @param {number} totalBudget - integer currency budget, covering only levels not already owned
  * @param {Record<string, number>} [reservedLevels] - line name -> minimum number of levels that must be bought
+ * @param {Record<string, number>} [ownedLevels] - line name -> levels already purchased before this
+ *   budget existed. Their cost is sunk (not charged against totalBudget) and their FD is added to
+ *   the result unconditionally, on top of whatever the DP allocates for the remaining levels.
  * @returns {{
  *   totalFd: number,
- *   chosenLevels: Record<string, number>,   // line name -> number of levels bought
+ *   chosenLevels: Record<string, number>,   // line name -> number of levels bought (including owned)
  *   linePrefixes: Record<string, Array<{cost:number, fd:number}>>,
  *   lineSteps: Record<string, Array<{level:number, cost:number, statGain:number}>>,
  * }}
- * @throws {Error} if reserved levels alone cost more than totalBudget
+ * @throws {Error} if reserved levels beyond what's already owned cost more than totalBudget
  */
-export function optimizeAllocation(lines, weights, totalBudget, reservedLevels = {}) {
+export function optimizeAllocation(lines, weights, totalBudget, reservedLevels = {}, ownedLevels = {}) {
   const budget = Math.floor(totalBudget);
 
   const linePrefixes = {};
   const lineSteps = {};
   const minK = {};
+  const ownedK = {};
 
+  let sunkFd = 0;
   let reservedCost = 0;
   for (const line of lines) {
     const fdPerUnit = weights[line.name] ?? 0;
@@ -103,18 +108,23 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
     const prefixes = buildPrefixSums(steps, fdPerUnit);
     linePrefixes[line.name] = prefixes;
 
-    const reserved = Math.min(reservedLevels[line.name] ?? 0, steps.length);
+    const owned = Math.min(ownedLevels[line.name] ?? 0, steps.length);
+    ownedK[line.name] = owned;
+    sunkFd += prefixes[owned].fd;
+
+    const reserved = Math.max(Math.min(reservedLevels[line.name] ?? 0, steps.length), owned);
     minK[line.name] = reserved;
-    reservedCost += prefixes[reserved].cost;
+    reservedCost += prefixes[reserved].cost - prefixes[owned].cost;
   }
 
   if (reservedCost > budget) {
     throw new Error(
-      `Reserved levels cost ${reservedCost}, which exceeds the total budget of ${budget}.`
+      `Reserved levels cost ${reservedCost} beyond what's already owned, which exceeds the remaining budget of ${budget}.`
     );
   }
 
-  // dp[c] = max total FD achievable with exactly budget c spent so far
+  // dp[c] = max total *additional* FD achievable with exactly budget c spent so far
+  // (owned levels' FD is tracked separately in sunkFd and added back at the end).
   let dp = new Array(budget + 1).fill(0);
 
   // Track, for each line processed, which prefix length was chosen at each
@@ -124,6 +134,9 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
   for (const line of lines) {
     const prefixes = linePrefixes[line.name];
     const startK = minK[line.name];
+    const owned = ownedK[line.name];
+    const ownedCost = prefixes[owned].cost;
+    const ownedFd = prefixes[owned].fd;
     const nextDp = new Array(budget + 1).fill(-Infinity);
     const choices = new Array(budget + 1).fill(startK);
 
@@ -131,7 +144,8 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
       let best = -Infinity;
       let bestK = startK;
       for (let k = startK; k < prefixes.length; k++) {
-        const { cost, fd } = prefixes[k];
+        const cost = prefixes[k].cost - ownedCost;
+        const fd = prefixes[k].fd - ownedFd;
         if (cost > c) break; // prefixes sorted by increasing cost
         const candidate = dp[c - cost] + fd;
         if (candidate > best) {
@@ -164,11 +178,12 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
     const line = lines[i];
     const k = choiceHistory[i][remaining];
     chosenLevels[line.name] = k;
-    remaining -= linePrefixes[line.name][k].cost;
+    const owned = ownedK[line.name];
+    remaining -= linePrefixes[line.name][k].cost - linePrefixes[line.name][owned].cost;
   }
 
   return {
-    totalFd: dp[bestCapacity],
+    totalFd: dp[bestCapacity] + sunkFd,
     chosenLevels,
     linePrefixes,
     lineSteps,
@@ -195,25 +210,28 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
  * bought (the DP requires it), only their timing is unconstrained.
  *
  * @param {Array<{ name: string }>} lines
- * @param {Record<string, number>} chosenLevels - line name -> levels bought
+ * @param {Record<string, number>} chosenLevels - line name -> levels bought (including owned)
  * @param {Record<string, Array<{level:number, cost:number, statGain:number}>>} lineSteps
  * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
- * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number>, deadlines?: Record<string, number> }} budget
+ * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number>, deadlines?: Record<string, number>, ownedLevels?: Record<string, number> }} budget
  * @returns {{ weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>, totalFdGained: number }}
  * @throws {Error} if a line's deadline can't be met given the income schedule
  */
 export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, budget) {
-  const { incomeByWeek, reservedLevels = {}, deadlines = {} } = budget;
+  const { incomeByWeek, reservedLevels = {}, deadlines = {}, ownedLevels = {} } = budget;
 
   // Flatten selected steps, keeping per-line order via a pointer per line.
+  // Already-owned levels were bought before this schedule starts, so they're
+  // excluded here — only the newly-purchasable steps beyond ownership appear.
   const remainingByLine = {};
   for (const line of lines) {
+    const owned = Math.min(ownedLevels[line.name] ?? 0, lineSteps[line.name].length);
     const count = chosenLevels[line.name] || 0;
-    const reservedCount = Math.min(reservedLevels[line.name] ?? 0, count);
+    const reservedCount = Math.max(0, Math.min(reservedLevels[line.name] ?? 0, count) - owned);
     const deadline = deadlines[line.name] ?? null;
     const fdPerUnit = weights[line.name] ?? 0;
     remainingByLine[line.name] = lineSteps[line.name]
-      .slice(0, count)
+      .slice(owned, count)
       .map((step, idx) => ({
         line: line.name,
         level: step.level,
@@ -340,6 +358,33 @@ export function computeWeeklyIncome({
   return incomeByWeek;
 }
 
+/**
+ * Guess how far into the event a player already is, from how many points
+ * they've already spent (e.g. on event stat levels bought before using this
+ * tool). Finds the earliest week by which cumulative income would have
+ * covered that spend, so the optimizer can pick up from "now" instead of
+ * re-planning the whole event from week 1.
+ *
+ * @param {number[]} incomeByWeek - full-event income schedule (see computeWeeklyIncome)
+ * @param {number} spentSoFar - total points already spent on current levels
+ * @returns {{ week: number, leftover: number, overspent: boolean }}
+ *   week: number of weeks considered "already elapsed" (0 if spentSoFar is 0)
+ *   leftover: unspent income already earned by that week, to roll into next week's budget
+ *   overspent: true if spentSoFar exceeds the theoretical max income for the whole event
+ */
+export function estimateCurrentWeek(incomeByWeek, spentSoFar) {
+  if (spentSoFar <= 0) return { week: 0, leftover: 0, overspent: false };
+
+  let cumulative = 0;
+  for (let i = 0; i < incomeByWeek.length; i++) {
+    cumulative += incomeByWeek[i];
+    if (cumulative >= spentSoFar) {
+      return { week: i + 1, leftover: cumulative - spentSoFar, overspent: false };
+    }
+  }
+  return { week: incomeByWeek.length, leftover: 0, overspent: true };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -349,21 +394,21 @@ export function computeWeeklyIncome({
  *
  * @param {Array<{ name: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
  * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
- * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number>, deadlines?: Record<string, number> }} budget
+ * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number>, deadlines?: Record<string, number>, ownedLevels?: Record<string, number> }} budget
  * @returns {{
  *   weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>,
- *   totalFdGained: number,
+ *   totalFdGained: number,   // includes FD already secured from ownedLevels, not just this schedule's purchases
  *   chosenLevels: Record<string, number>,
  * }}
- * @throws {Error} if reserved levels cost more than the total budget, or a
+ * @throws {Error} if reserved levels beyond ownership cost more than the total budget, or a
  *   line's deadline can't be met given the income schedule
  */
 export function optimizeEvent(lines, weights, budget) {
-  const { incomeByWeek, reservedLevels = {}, deadlines = {} } = budget;
+  const { incomeByWeek, reservedLevels = {}, deadlines = {}, ownedLevels = {} } = budget;
   const totalBudget = incomeByWeek.reduce((sum, income) => sum + income, 0);
 
-  const { chosenLevels, lineSteps } = optimizeAllocation(lines, weights, totalBudget, reservedLevels);
-  const schedule = buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, { incomeByWeek, reservedLevels, deadlines });
+  const { chosenLevels, lineSteps, totalFd } = optimizeAllocation(lines, weights, totalBudget, reservedLevels, ownedLevels);
+  const schedule = buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, { incomeByWeek, reservedLevels, deadlines, ownedLevels });
 
-  return { ...schedule, chosenLevels };
+  return { ...schedule, totalFdGained: totalFd, chosenLevels };
 }

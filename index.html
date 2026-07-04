@@ -352,6 +352,7 @@ Boss Damage	40	3.725%
         <li>Load FD data first: on the Stat Parser tab, click the copy button under <strong>FD</strong> in Scouter's Stat Efficiency section, paste it in, and parse.</li>
         <li>Scouter's export doesn't include <strong>Buff Duration</strong> or <strong>Crit Rate</strong>. Grab those FD values yourself and type them into the matching line's FD weight field.</li>
         <li>To force a skill to a specific level, set <strong>Reserved Levels</strong> for that line. Add a <strong>Complete by wk</strong> deadline if it needs to hit that level by a certain week.</li>
+        <li>Already partway through the event? Fill in <strong>Current level</strong> for whatever you've already bought. The tool estimates what week you're on from those points and optimizes only what's left.</li>
       </ol>
       <label class="help-dismiss">
         <input type="checkbox" id="helpDontShowAgain" onchange="onHelpDismissToggle()">
@@ -440,7 +441,7 @@ Boss Damage	40	3.725%
 <script type="module">
 import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES } from "./maple-constants/index.js";
 import { parse } from "./maple-parser.js";
-import { optimizeEvent, computeWeeklyIncome } from "./maple-event-optimizer.js";
+import { optimizeEvent, computeWeeklyIncome, estimateCurrentWeek, computeMarginalSteps } from "./maple-event-optimizer.js";
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
 window.showTab = function (tab) {
@@ -799,6 +800,7 @@ window.onEventSelect = function () {
         <th>Line</th>
         <th>Stat key</th>
         <th class="r">FD weight</th>
+        <th class="r">Current level</th>
         <th class="r">Reserved levels</th>
         <th class="r">Complete by wk</th>
       </tr>
@@ -821,6 +823,9 @@ window.onEventSelect = function () {
       <td class="stat-name">${statKeyCell}</td>
       <td class="qty-cell">
         <input class="row-qty no-spinner" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}">
+      </td>
+      <td class="qty-cell">
+        <input class="row-qty" id="lineCurrent_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0" oninput="onLineCurrentChange(${i})">
       </td>
       <td class="qty-cell">
         <input class="row-qty" id="lineReserved_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0" oninput="onLineReservedChange(${i})">
@@ -853,12 +858,15 @@ window.onLineStatKeyChange = function (i) {
  * that line, so the deadline input stays disabled (and clears) until Reserved
  * Levels is > 0. Also clamps typed input past the line's max level count,
  * since the HTML `max` attribute only constrains the spinner, not typing.
+ * Reserved can never drop below Current level — you can't reserve fewer
+ * levels than you already own.
  */
 window.onLineReservedChange = function (i) {
   const eventName = document.getElementById("eventSelect")?.value;
   const line = eventName ? EVENT_CONFIGS[eventName].lines[i] : null;
   const reservedInput = document.getElementById(`lineReserved_${i}`);
   const deadlineInput = document.getElementById(`lineDeadline_${i}`);
+  const currentInput  = document.getElementById(`lineCurrent_${i}`);
   if (!reservedInput || !deadlineInput) return;
 
   let reserved = parseInt(reservedInput.value, 10);
@@ -867,9 +875,35 @@ window.onLineReservedChange = function (i) {
     reservedInput.value = reserved;
   }
 
+  const current = parseInt(currentInput?.value, 10) || 0;
+  if (!isNaN(reserved) && reserved < current) {
+    reserved = current;
+    reservedInput.value = reserved;
+  }
+
   const hasReserved = !isNaN(reserved) && reserved > 0;
   deadlineInput.disabled = !hasReserved;
   if (!hasReserved) deadlineInput.value = "";
+};
+
+/**
+ * Current level (levels already owned before using this tool) clamps to the
+ * line's max, and pulls Reserved Levels up to match if it's now lower than
+ * what's already owned — you can't reserve fewer levels than you have.
+ */
+window.onLineCurrentChange = function (i) {
+  const eventName = document.getElementById("eventSelect")?.value;
+  const line = eventName ? EVENT_CONFIGS[eventName].lines[i] : null;
+  const currentInput = document.getElementById(`lineCurrent_${i}`);
+  if (!currentInput) return;
+
+  let current = parseInt(currentInput.value, 10);
+  if (line && !isNaN(current) && current > line.levels.length) {
+    current = line.levels.length;
+    currentInput.value = current;
+  }
+
+  onLineReservedChange(i);
 };
 
 /**
@@ -938,16 +972,25 @@ window.runOptimize = function () {
 
   const lines = EVENT_CONFIGS[eventName].lines;
 
-  // Read the current (possibly hand-edited) weight/reserved/deadline values straight off the table.
+  // Read the current (possibly hand-edited) weight/current/reserved/deadline values straight off the table.
   const weights = {};
+  const ownedLevels = {};
   const reservedLevels = {};
   const deadlines = {};
+  let spentSoFar = 0;
   for (const [i, line] of lines.entries()) {
     const weightVal   = parseFloat(document.getElementById(`lineWeight_${i}`).value);
+    const currentVal  = parseInt(document.getElementById(`lineCurrent_${i}`).value, 10);
     const reservedVal = parseInt(document.getElementById(`lineReserved_${i}`).value, 10);
     const deadlineRaw = document.getElementById(`lineDeadline_${i}`).value.trim();
     weights[line.name] = isNaN(weightVal) ? 0 : weightVal;
+    ownedLevels[line.name] = isNaN(currentVal) ? 0 : currentVal;
     reservedLevels[line.name] = isNaN(reservedVal) ? 0 : reservedVal;
+
+    if (ownedLevels[line.name] > 0) {
+      const steps = computeMarginalSteps(line);
+      spentSoFar += steps.slice(0, ownedLevels[line.name]).reduce((sum, s) => sum + s.cost, 0);
+    }
 
     if (deadlineRaw !== "") {
       const deadlineVal = parseInt(deadlineRaw, 10);
@@ -968,9 +1011,39 @@ window.runOptimize = function () {
     totalPaidPoints, maxPaidPointsPerWeek: MAX_PAID_POINTS_PER_WEEK,
   });
 
+  // Guess how far into the event we already are from what's already been
+  // spent on current levels, then only optimize the weeks that remain.
+  const { week: guessedWeek, leftover, overspent } = estimateCurrentWeek(incomeByWeek, spentSoFar);
+  if (overspent) {
+    showEventError(
+      `The levels already owned cost ${spentSoFar} points, more than this event's entire income ` +
+      `(${incomeByWeek.reduce((a, b) => a + b, 0)} across ${numWeeks} weeks) could ever provide. ` +
+      `Check the Current level values and the income settings above.`
+    );
+    return;
+  }
+
+  const remainingIncomeByWeek = incomeByWeek.slice(guessedWeek);
+  if (remainingIncomeByWeek.length > 0) remainingIncomeByWeek[0] += leftover;
+
+  const shiftedDeadlines = {};
+  for (const [name, week] of Object.entries(deadlines)) {
+    const shifted = week - guessedWeek;
+    if (shifted < 1) {
+      showEventError(
+        `"${name}"'s "Complete by wk ${week}" deadline has already passed — you're estimated to be in week ${guessedWeek + 1} already, based on points already spent.`
+      );
+      return;
+    }
+    shiftedDeadlines[name] = shifted;
+  }
+
   try {
-    const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels, deadlines });
-    renderEventResult(result);
+    const result = optimizeEvent(lines, weights, {
+      incomeByWeek: remainingIncomeByWeek, reservedLevels, deadlines: shiftedDeadlines, ownedLevels,
+    });
+    result.weeks = result.weeks.map((w) => ({ ...w, week: w.week + guessedWeek }));
+    renderEventResult(result, { guessedWeek, spentSoFar });
     renderStatSummary(lines, weights, result.chosenLevels);
   } catch (err) {
     showEventError(err.message);
@@ -1017,10 +1090,13 @@ function renderStatSummary(lines, weights, chosenLevels) {
   wrap.innerHTML = html;
 }
 
-function renderEventResult(result) {
+function renderEventResult(result, { guessedWeek = 0, spentSoFar = 0 } = {}) {
   const summary = document.getElementById("eventSummary");
   summary.classList.add("visible");
-  summary.innerHTML = `Total gain by end of event: <strong>${result.totalFdGained.toFixed(4)}</strong>`;
+  const weekNote = guessedWeek > 0
+    ? `Estimated current week: <strong>${guessedWeek + 1}</strong> (from ${spentSoFar} pts already spent on current levels). `
+    : "";
+  summary.innerHTML = `${weekNote}Total gain by end of event: <strong>${result.totalFdGained.toFixed(4)}</strong>`;
 
   const wrap = document.getElementById("eventScheduleWrap");
   const rowsWithPurchases = result.weeks.filter((w) => w.purchases.length > 0);
