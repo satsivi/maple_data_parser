@@ -65,7 +65,7 @@
       },
       {
         "name": "Buff Duration (%)",
-        "statKeys": ["buff_duration_pct"],
+        "statKeys": [],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -77,7 +77,7 @@
       },
       {
         "name": "Critical Rate (%)",
-        "statKeys": ["critical_rate_pct"],
+        "statKeys": [],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -89,7 +89,7 @@
       },
       {
         "name": "Normal Enemy Damage (%)",
-        "statKeys": ["normal_enemy_damage_pct"],
+        "statKeys": [],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -101,7 +101,7 @@
       },
       {
         "name": "Arcane Power",
-        "statKeys": ["arcane_power"],
+        "statKeys": [],
         "levels": [
           { "level": 1, "cost": 1, "value": 10 },
           { "level": 2, "cost": 2, "value": 20 },
@@ -113,7 +113,7 @@
       },
       {
         "name": "Sacred Power",
-        "statKeys": ["sacred_power"],
+        "statKeys": [],
         "levels": [
           { "level": 1, "cost": 1, "value": 10 },
           { "level": 2, "cost": 2, "value": 20 },
@@ -125,7 +125,7 @@
       },
       {
         "name": "EXP Obtained (%)",
-        "statKeys": ["exp_pct"],
+        "statKeys": [],
         "levels": [
           { "level": 1, "cost": 1, "value": 2.5 },
           { "level": 2, "cost": 2, "value": 5 },
