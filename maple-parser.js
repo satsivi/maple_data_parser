@@ -15,6 +15,22 @@ import { CLASS_STATS, STAT_TYPES } from "./maple-constants/index.js";
 
 const STAT_ABBRS = ["STR", "DEX", "INT", "LUK", "HP"];
 
+// Matches a tab (with any surrounding spaces) or a run of 2+ plain spaces.
+// Pasted tables sometimes lose their tabs and arrive as space-padded columns
+// instead, so a single-space delimiter can't be used — labels like
+// "Boss Damage" and "Not Affected by % STR" contain single spaces internally.
+const COLUMN_SEP = /[ \t]*\t[ \t]*|[ ]{2,}/;
+
+/**
+ * Split a pasted row into columns, tolerating tabs or space-padded columns.
+ *
+ * @param {string} line
+ * @returns {string[]}
+ */
+function splitColumns(line) {
+  return line.split(COLUMN_SEP).map((part) => part.trim());
+}
+
 /**
  * Detect the equivalence type from the third column header.
  * Returns null if no recognizable header is found — caller should error on null.
@@ -25,7 +41,7 @@ const STAT_ABBRS = ["STR", "DEX", "INT", "LUK", "HP"];
 function detectEquivalenceType(lines) {
   for (const line of lines) {
     if (line.startsWith("\uD56D\uBAA9") || line.toLowerCase().startsWith("stat")) {
-      const parts = line.split("\t");
+      const parts = splitColumns(line);
       if (parts.length >= 3) {
         const col = parts[2].trim().toLowerCase();
         if (col.includes("main"))                             return "main_stat";
@@ -100,7 +116,7 @@ function canonicalKey(label, statType) {
  */
 function extractTableStats(dataLines) {
   return dataLines
-    .map((l) => l.split("\t")[0]?.trim())
+    .map((l) => splitColumns(l)[0])
     .filter((label) => STAT_ABBRS.includes(label));
 }
 
@@ -189,13 +205,13 @@ export function parse(rawText, className) {
   // --- parse rows ---
   const rows = [];
   for (const line of dataLines) {
-    const parts = line.split("\t");
+    const parts = splitColumns(line);
     if (parts.length < 3) {
       throw new Error(`Could not parse row: "${line}" — expected 3 tab-separated columns.`);
     }
-    const label = parts[0].trim();
-    const value = parseFloat(parts[1].trim());
-    const col3  = parseFloat(parts[2].trim().replace("%", ""));
+    const label = parts[0];
+    const value = parseFloat(parts[1]);
+    const col3  = parseFloat(parts[2].replace("%", ""));
     if (isNaN(value) || isNaN(col3)) {
       throw new Error(`Invalid numbers in row: "${line}"`);
     }
