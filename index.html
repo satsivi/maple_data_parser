@@ -22,7 +22,7 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
-  body { display: flex; flex-direction: column; }
+  body { display: flex; flex-direction: row; }
 
   /* ── toolbar ── */
   .toolbar {
@@ -156,10 +156,56 @@
   .empty-state {
     padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px;
   }
+
+  /* ── sidebar ── */
+  .sidebar {
+    flex-shrink: 0; width: 176px; display: flex; flex-direction: column;
+    gap: 2px; padding: 16px 10px; border-right: 1px solid var(--border);
+  }
+  .sidebar-title {
+    font-size: 13px; font-weight: 600; padding: 0 8px 14px; white-space: nowrap;
+  }
+  .tab-btn {
+    background: transparent; border: none; border-left: 2px solid transparent;
+    color: var(--text-muted); font-family: var(--sans); font-size: 13px; font-weight: 500;
+    padding: 9px 10px; border-radius: 6px; cursor: pointer; text-align: left;
+  }
+  .tab-btn:hover { opacity: 1; color: var(--text); background: var(--surface); }
+  .tab-btn.active { color: var(--accent); background: var(--accent-dim); border-left-color: var(--accent); }
+  .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  /* ── event optimizer panel ── */
+  .num-input {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 6px; font-size: 13px; font-family: var(--mono);
+    outline: none; width: 96px; transition: border-color 0.12s;
+  }
+  .num-input:focus { border-color: var(--accent); }
+  .input-label { font-size: 11px; color: var(--text-muted); margin-right: 4px; white-space: nowrap; }
+  .event-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
+  .event-summary {
+    font-size: 13px; color: var(--text); margin-bottom: 14px;
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; display: none;
+  }
+  .event-summary.visible { display: block; }
+  .event-summary strong { color: var(--accent); }
+  .week-label {
+    font-family: var(--mono); font-weight: 600; color: var(--text);
+  }
 </style>
 </head>
 <body>
 
+<div class="sidebar">
+  <div class="sidebar-title">🍁 Maple Tools</div>
+  <button class="tab-btn active" id="tabBtnParser" onclick="showTab('parser')">Stat Parser</button>
+  <button class="tab-btn" id="tabBtnEvent" onclick="showTab('event')">Event Optimizer</button>
+</div>
+
+<div class="main-content">
+<div class="view" id="parserView">
 <div class="toolbar">
   <span class="toolbar-title">🍁 Maple Stat Equivalence Parser</span>
 
@@ -212,10 +258,61 @@ Boss Damage	40	3.725%
     </div>
   </div>
 </div>
+</div>
+
+<div class="view" id="eventView" style="display:none">
+<div class="toolbar">
+  <span class="toolbar-title">📅 Event Stat Optimizer</span>
+
+  <span class="input-label">Event</span>
+  <select class="num-input" id="eventSelect" style="width:160px"></select>
+
+  <div class="divider"></div>
+
+  <span class="input-label">Weekly income</span>
+  <input class="num-input" id="weeklyIncomeInput" type="number" min="0" step="any" value="0">
+
+  <span class="input-label">Weeks</span>
+  <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="1" style="width:64px">
+
+  <span class="input-label">Bonus points</span>
+  <input class="num-input" id="bonusPointsInput" type="number" min="0" step="any" value="0">
+
+  <span class="input-label">Bonus week</span>
+  <input class="num-input" id="bonusWeekInput" type="number" min="1" step="1" value="1" style="width:64px">
+
+  <div class="divider"></div>
+
+  <button class="btn-primary" onclick="runOptimize()">Optimize →</button>
+
+  <span class="error-inline" id="eventErrorBar"></span>
+
+  <div class="spacer"></div>
+</div>
+
+<div class="event-body" id="eventBody">
+  <div class="event-summary" id="eventSummary"></div>
+  <div id="eventScheduleWrap">
+    <div class="empty-state">Parse a stat table on the Parser tab, then run the optimizer.</div>
+  </div>
+</div>
+</div>
+</div>
 
 <script type="module">
 import { CLASS_NAMES, CLASS_STATS, STAT_TYPES } from "./maple-constants/index.js";
 import { parse } from "./maple-parser.js";
+import { EVENT_CONFIGS, EVENT_NAMES } from "./maple-event-constants.js";
+import { optimizeEvent } from "./maple-event-optimizer.js";
+
+// ── tabs ─────────────────────────────────────────────────────────────────────
+window.showTab = function (tab) {
+  const isParser = tab === "parser";
+  document.getElementById("parserView").style.display = isParser ? "" : "none";
+  document.getElementById("eventView").style.display   = isParser ? "none" : "";
+  document.getElementById("tabBtnParser").classList.toggle("active", isParser);
+  document.getElementById("tabBtnEvent").classList.toggle("active", !isParser);
+};
 
 // ── autocomplete ────────────────────────────────────────────────────────────
 let acIndex   = -1;
@@ -304,6 +401,7 @@ function updateBadge() {
 // ── state ────────────────────────────────────────────────────────────────────
 let parsedRows      = []; // { label, key, perUnit }
 let parsedEquivType = "final_damage";
+let lastParsedWeights = null; // most recent successful parse().weights, shared with Event Optimizer tab
 
 // ── error ────────────────────────────────────────────────────────────────────
 function showError(msg) {
@@ -331,6 +429,7 @@ window.runParse = function () {
     // Rebuild row cache for table — re-parse raw rows to get per-unit values
     parsedRows      = buildRows(raw, cls);
     parsedEquivType = result.equivalence_type;
+    lastParsedWeights = result.weights;
     renderTable();
   } catch (err) {
     showError(err.message);
@@ -424,6 +523,98 @@ window.copyOutput = function () {
     setTimeout(() => { btn.textContent = "Copy JSON"; btn.classList.remove("copied"); }, 1800);
   });
 };
+
+// ── event optimizer ──────────────────────────────────────────────────────────
+function showEventError(msg) {
+  const bar = document.getElementById("eventErrorBar");
+  bar.textContent = "⚠ " + msg;
+  bar.classList.add("visible");
+}
+function clearEventError() {
+  document.getElementById("eventErrorBar").classList.remove("visible");
+}
+
+function populateEventSelect() {
+  const select = document.getElementById("eventSelect");
+  select.innerHTML = EVENT_NAMES.map((n) =>
+    `<option value="${n}">${displayName(n)}</option>`
+  ).join("");
+}
+
+window.runOptimize = function () {
+  clearEventError();
+
+  if (!lastParsedWeights) {
+    showEventError("Parse a stat table on the Parser tab first.");
+    return;
+  }
+
+  const eventName    = document.getElementById("eventSelect").value;
+  const weeklyIncome = parseFloat(document.getElementById("weeklyIncomeInput").value);
+  const numWeeks     = parseInt(document.getElementById("numWeeksInput").value, 10);
+  const bonusPoints  = parseFloat(document.getElementById("bonusPointsInput").value) || 0;
+  const bonusWeek    = parseInt(document.getElementById("bonusWeekInput").value, 10) || 1;
+
+  if (!eventName)               { showEventError("No event configured — check maple-event-constants.js."); return; }
+  if (isNaN(weeklyIncome) || weeklyIncome < 0) { showEventError("Enter a valid weekly income."); return; }
+  if (isNaN(numWeeks) || numWeeks < 1)         { showEventError("Enter a valid number of weeks."); return; }
+
+  const lines = EVENT_CONFIGS[eventName].lines;
+
+  try {
+    const result = optimizeEvent(lines, lastParsedWeights, {
+      weeklyIncome, numWeeks, bonusPoints, bonusWeek,
+    });
+    renderEventResult(result);
+  } catch (err) {
+    showEventError(err.message);
+  }
+};
+
+function renderEventResult(result) {
+  const summary = document.getElementById("eventSummary");
+  summary.classList.add("visible");
+  summary.innerHTML = `Total gain by end of event: <strong>${result.totalFdGained.toFixed(4)}</strong>`;
+
+  const wrap = document.getElementById("eventScheduleWrap");
+  const rowsWithPurchases = result.weeks.filter((w) => w.purchases.length > 0);
+
+  if (!rowsWithPurchases.length) {
+    wrap.innerHTML = '<div class="empty-state">No purchases were affordable within this budget.</div>';
+    return;
+  }
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Line</th>
+        <th class="r">Level</th>
+        <th class="r">Cost</th>
+        <th class="r">Gain</th>
+        <th class="r">Balance</th>
+      </tr>
+    </thead><tbody>`;
+
+  for (const week of result.weeks) {
+    if (!week.purchases.length) continue;
+    week.purchases.forEach((p, i) => {
+      html += `<tr>
+        <td class="week-label">${i === 0 ? week.week : ""}</td>
+        <td class="stat-name">${p.line}</td>
+        <td class="equiv-val">${p.level}</td>
+        <td class="equiv-val">${p.cost}</td>
+        <td class="equiv-val">${p.fdGain.toFixed(4)}</td>
+        <td class="equiv-val">${i === week.purchases.length - 1 ? week.balance.toFixed(2) : ""}</td>
+      </tr>`;
+    });
+  }
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+populateEventSelect();
 
 // Populate autocomplete on load
 window.onClassInput();
