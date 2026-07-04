@@ -294,11 +294,17 @@ Boss Damage	40	3.725%
 </div>
 
 <div class="body">
-  <div class="left-col" style="grid-template-rows: 1fr">
+  <div class="left-col" style="grid-template-rows: 3fr 2fr">
     <div class="panel">
       <div class="panel-label">Event Lines — FD weight &amp; reserved levels</div>
       <div class="table-scroll" id="linesTableWrap">
         <div class="empty-state">Select an event to configure its lines.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-label">Result Summary — final level &amp; FD per stat</div>
+      <div class="table-scroll" id="statSummaryWrap">
+        <div class="empty-state">Run Optimize to see the final allocation per stat.</div>
       </div>
     </div>
   </div>
@@ -590,6 +596,8 @@ window.onEventSelect = function () {
   document.getElementById("eventSummary").classList.remove("visible");
   document.getElementById("eventScheduleWrap").innerHTML =
     '<div class="empty-state">Configure lines and click Optimize.</div>';
+  document.getElementById("statSummaryWrap").innerHTML =
+    '<div class="empty-state">Run Optimize to see the final allocation per stat.</div>';
 
   const eventName = document.getElementById("eventSelect").value;
   const wrap = document.getElementById("linesTableWrap");
@@ -708,10 +716,51 @@ window.runOptimize = function () {
   try {
     const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels });
     renderEventResult(result);
+    renderStatSummary(lines, weights, result.chosenLevels);
   } catch (err) {
     showEventError(err.message);
   }
 };
+
+/**
+ * Show the final level reached and total FD contributed per stat line.
+ * A line's cumulative stat value at its chosen level is already stored
+ * directly on that level (levels store cumulative, not delta, values), so
+ * FD contribution is just weight * levels[chosenLevel - 1].value.
+ */
+function renderStatSummary(lines, weights, chosenLevels) {
+  const wrap = document.getElementById("statSummaryWrap");
+
+  const rows = lines.map((line) => {
+    const level = chosenLevels[line.name] || 0;
+    const maxLevel = line.levels.length;
+    const cumulativeValue = level > 0 ? line.levels[level - 1].value : 0;
+    const fd = cumulativeValue * (weights[line.name] ?? 0);
+    return { name: line.name, level, maxLevel, fd };
+  });
+
+  rows.sort((a, b) => b.fd - a.fd);
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th>Stat</th>
+        <th class="r">Level</th>
+        <th class="r">FD</th>
+      </tr>
+    </thead><tbody>`;
+
+  rows.forEach((row) => {
+    html += `<tr>
+      <td class="stat-name">${row.name}</td>
+      <td class="equiv-val">${row.level} / ${row.maxLevel}</td>
+      <td class="equiv-val">${row.fd.toFixed(4)}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+}
 
 function renderEventResult(result) {
   const summary = document.getElementById("eventSummary");
