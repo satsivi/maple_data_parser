@@ -2,18 +2,21 @@
  * maple-event-optimizer.js
  *
  * Pure logic, no DOM. Given a set of event stat lines (see
- * maple-constants/event-configs.json for the schema), an FD weight per stat
- * key (seeded from maple-parser.js's parse() output but editable by the
- * user for stats the parser can't derive), an optional set of reserved
- * level counts per line, and a week-by-week currency income array, computes
- * which levels to buy to maximize total FD gain by the end of the event,
- * plus a week-by-week purchase schedule that respects per-line level
+ * maple-constants/event-configs.json for the schema), an FD weight per line
+ * (keyed by line name — index.html seeds each line's weight from
+ * maple-parser.js's parse() output, summing whichever stat keys the line
+ * maps to, but the user can hand-edit any of them), an optional set of
+ * reserved level counts per line, and a week-by-week currency income array,
+ * computes which levels to buy to maximize total FD gain by the end of the
+ * event, plus a week-by-week purchase schedule that respects per-line level
  * ordering and cumulative currency availability.
  *
  * Primary export: optimizeEvent(lines, weights, budget)
  * Also exported: computeWeeklyIncome(...) for building the incomeByWeek
- * array from a daily-claim + lifetime-cap + recurring-weekly-bonus income
- * model (the shape most MapleStory events actually use).
+ * array from a per-claim + per-week-claim-cap + lifetime-claim-cap +
+ * recurring-weekly-bonus income model (the shape most MapleStory events
+ * actually use — e.g. "5 points per claim, up to 5 claims a week, 60
+ * claims total across the event").
  */
 
 // ---------------------------------------------------------------------------
@@ -24,7 +27,7 @@
  * Walk a line's levels and compute the marginal stat gained at each level
  * (levels store cumulative stat value, not a delta).
  *
- * @param {{ name: string, statKey: string, levels: Array<{level:number, cost:number, value:number}> }} line
+ * @param {{ name: string, levels: Array<{level:number, cost:number, value:number}> }} line
  * @returns {Array<{ level: number, cost: number, statGain: number }>}
  */
 export function computeMarginalSteps(line) {
@@ -67,14 +70,14 @@ function buildPrefixSums(steps, fdPerUnit) {
  * (you can't skip level 2 to buy level 3), so each line contributes one
  * "prefix length" choice — this is a grouped / multiple-choice knapsack.
  *
- * A line whose statKey has no entry in `weights` is treated as contributing
- * 0 FD per unit rather than throwing — this lets callers include lines the
- * parser can't derive a weight for (e.g. Critical Rate, which only matters
- * for some classes) and simply leave them at 0 unless the user fills in a
- * value by hand.
+ * A line missing from `weights` is treated as contributing 0 FD per unit
+ * rather than throwing — this lets callers include lines the parser can't
+ * derive a weight for (e.g. Critical Rate, which only matters for some
+ * classes) and simply leave them at 0 unless the user fills in a value by
+ * hand.
  *
- * @param {Array<{ name: string, statKey: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
- * @param {Record<string, number>} weights - FD weights, e.g. from parse().weights, keyed by statKey
+ * @param {Array<{ name: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
+ * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
  * @param {number} totalBudget - integer currency budget
  * @param {Record<string, number>} [reservedLevels] - line name -> minimum number of levels that must be bought
  * @returns {{
@@ -94,7 +97,7 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
 
   let reservedCost = 0;
   for (const line of lines) {
-    const fdPerUnit = weights[line.statKey] ?? 0;
+    const fdPerUnit = weights[line.name] ?? 0;
     const steps = computeMarginalSteps(line);
     lineSteps[line.name] = steps;
     const prefixes = buildPrefixSums(steps, fdPerUnit);
@@ -183,10 +186,10 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
  * affordable selected step, respecting that a line's levels must be bought
  * in order.
  *
- * @param {Array<{ name: string, statKey: string }>} lines
+ * @param {Array<{ name: string }>} lines
  * @param {Record<string, number>} chosenLevels - line name -> levels bought
  * @param {Record<string, Array<{level:number, cost:number, statGain:number}>>} lineSteps
- * @param {Record<string, number>} weights
+ * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
  * @param {{ incomeByWeek: number[] }} budget
  * @returns {{ weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>, totalFdGained: number }}
  */
@@ -197,7 +200,7 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
   const remainingByLine = {};
   for (const line of lines) {
     const count = chosenLevels[line.name] || 0;
-    const fdPerUnit = weights[line.statKey] ?? 0;
+    const fdPerUnit = weights[line.name] ?? 0;
     remainingByLine[line.name] = lineSteps[line.name]
       .slice(0, count)
       .map((step) => ({
@@ -259,36 +262,34 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
 
 /**
  * Build a week-by-week income array for the common MapleStory event income
- * shape: a daily free-currency claim capped both per-day and by a lifetime
- * total, plus a recurring weekly bonus (e.g. a cash-shop purchase available
- * every week).
+ * shape: a fixed-size claim (e.g. "5 points") claimable up to a limited
+ * number of times per week, capped by a lifetime total number of claims
+ * across the whole event, plus a recurring bonus (e.g. a cash-shop
+ * purchase) added every week regardless of the lifetime cap.
  *
  * @param {{
- *   maxPointsPerDay: number,     // free points obtainable per day (e.g. 5 claims x 5 pts = 25)
- *   maxLifetimePoints: number,   // total free points obtainable across the whole event
+ *   pointsPerClaim: number,      // points granted per claim (e.g. 5)
+ *   maxClaimsPerWeek: number,    // claims allowed per week (e.g. 5, for 25 pts/week)
+ *   maxLifetimeClaims: number,   // total claims allowed across the whole event (e.g. 60)
  *   weeklyBonusPoints?: number,  // extra points added every week regardless of the lifetime cap
- *   daysPerWeek?: number,        // defaults to 7
  *   numWeeks: number,
  * }} params
  * @returns {number[]} incomeByWeek, length numWeeks
  */
 export function computeWeeklyIncome({
-  maxPointsPerDay,
-  maxLifetimePoints,
+  pointsPerClaim,
+  maxClaimsPerWeek,
+  maxLifetimeClaims,
   weeklyBonusPoints = 0,
-  daysPerWeek = 7,
   numWeeks,
 }) {
   const incomeByWeek = [];
-  let claimedSoFar = 0;
+  let claimsSoFar = 0;
 
   for (let week = 1; week <= numWeeks; week++) {
-    const freeThisWeek = Math.max(
-      0,
-      Math.min(maxPointsPerDay * daysPerWeek, maxLifetimePoints - claimedSoFar)
-    );
-    claimedSoFar += freeThisWeek;
-    incomeByWeek.push(freeThisWeek + weeklyBonusPoints);
+    const claimsThisWeek = Math.max(0, Math.min(maxClaimsPerWeek, maxLifetimeClaims - claimsSoFar));
+    claimsSoFar += claimsThisWeek;
+    incomeByWeek.push(claimsThisWeek * pointsPerClaim + weeklyBonusPoints);
   }
 
   return incomeByWeek;
@@ -301,8 +302,8 @@ export function computeWeeklyIncome({
 /**
  * Compute the optimal event-stat purchase schedule.
  *
- * @param {Array<{ name: string, statKey: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
- * @param {Record<string, number>} weights - FD weights, e.g. from parse().weights, keyed by statKey
+ * @param {Array<{ name: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
+ * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
  * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number> }} budget
  * @returns {{
  *   weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>,

@@ -4,7 +4,7 @@
     "lines": [
       {
         "name": "Attack Power & Magic ATT",
-        "statKey": "attack",
+        "statKeys": ["attack"],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -16,7 +16,7 @@
       },
       {
         "name": "Boss Damage (%)",
-        "statKey": "boss_damage",
+        "statKeys": ["boss_damage"],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -28,7 +28,8 @@
       },
       {
         "name": "Ignore Defense (%)",
-        "statKey": "ied_300",
+        "statKeys": ["ied_380"],
+        "statKeyOptions": ["ied_300", "ied_380"],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -40,7 +41,7 @@
       },
       {
         "name": "All Stats",
-        "statKey": "all_stat_pct",
+        "statKeys": ["primary_stat", "secondary_stat", "tertiary_stat"],
         "levels": [
           { "level": 1, "cost": 1, "value": 10 },
           { "level": 2, "cost": 2, "value": 20 },
@@ -52,7 +53,7 @@
       },
       {
         "name": "HP/MP",
-        "statKey": "hp_mp",
+        "statKeys": ["hp_mp"],
         "levels": [
           { "level": 1, "cost": 1, "value": 500 },
           { "level": 2, "cost": 2, "value": 1000 },
@@ -64,7 +65,7 @@
       },
       {
         "name": "Buff Duration (%)",
-        "statKey": "buff_duration_pct",
+        "statKeys": ["buff_duration_pct"],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -76,7 +77,7 @@
       },
       {
         "name": "Critical Rate (%)",
-        "statKey": "critical_rate_pct",
+        "statKeys": ["critical_rate_pct"],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -88,7 +89,7 @@
       },
       {
         "name": "Normal Enemy Damage (%)",
-        "statKey": "normal_enemy_damage_pct",
+        "statKeys": ["normal_enemy_damage_pct"],
         "levels": [
           { "level": 1, "cost": 1, "value": 5 },
           { "level": 2, "cost": 2, "value": 10 },
@@ -100,7 +101,7 @@
       },
       {
         "name": "Arcane Power",
-        "statKey": "arcane_power",
+        "statKeys": ["arcane_power"],
         "levels": [
           { "level": 1, "cost": 1, "value": 10 },
           { "level": 2, "cost": 2, "value": 20 },
@@ -112,7 +113,7 @@
       },
       {
         "name": "Sacred Power",
-        "statKey": "sacred_power",
+        "statKeys": ["sacred_power"],
         "levels": [
           { "level": 1, "cost": 1, "value": 10 },
           { "level": 2, "cost": 2, "value": 20 },
@@ -124,7 +125,7 @@
       },
       {
         "name": "EXP Obtained (%)",
-        "statKey": "exp_pct",
+        "statKeys": ["exp_pct"],
         "levels": [
           { "level": 1, "cost": 1, "value": 2.5 },
           { "level": 2, "cost": 2, "value": 5 },

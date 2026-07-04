@@ -269,13 +269,16 @@ Boss Damage	40	3.725%
 
   <div class="divider"></div>
 
-  <span class="input-label">Max points/day</span>
-  <input class="num-input" id="maxPointsPerDayInput" type="number" min="0" step="any" value="0">
+  <span class="input-label">Points/claim</span>
+  <input class="num-input" id="pointsPerClaimInput" type="number" min="0" step="any" value="0" style="width:64px">
 
-  <span class="input-label">Lifetime cap</span>
-  <input class="num-input" id="maxLifetimePointsInput" type="number" min="0" step="any" value="0">
+  <span class="input-label">Max claims/week</span>
+  <input class="num-input" id="maxClaimsPerWeekInput" type="number" min="0" step="any" value="0" style="width:64px">
 
-  <span class="input-label">Weekly bonus</span>
+  <span class="input-label">Lifetime claim cap</span>
+  <input class="num-input" id="maxLifetimeClaimsInput" type="number" min="0" step="any" value="0">
+
+  <span class="input-label">Weekly bonus pts</span>
   <input class="num-input" id="weeklyBonusInput" type="number" min="0" step="any" value="0">
 
   <span class="input-label">Weeks</span>
@@ -560,10 +563,27 @@ function populateEventSelect() {
 }
 
 // ── event lines table (editable FD weight + reserved levels per line) ──────────
+// A line's FD weight seeds from the sum of lastParsedWeights across its
+// statKeys (e.g. "All Stats" sums primary_stat + secondary_stat since it's a
+// flat bonus to both). Lines with statKeyOptions (e.g. Ignore Defense, which
+// could mean ied_300 or ied_380 depending on the user's current IED total)
+// show a dropdown to pick which single key to seed from instead of a fixed
+// stat-key label.
+//
 // lineSeedWeights tracks the last value each row was auto-seeded with, keyed
-// by statKey, so reseedLinesTable() can tell "still at the seed, safe to
+// by line name, so reseedLinesTable() can tell "still at the seed, safe to
 // refresh" apart from "user hand-edited this, leave it alone".
 let lineSeedWeights = {};
+
+function currentStatKeys(line, i) {
+  if (!line.statKeyOptions) return line.statKeys;
+  const select = document.getElementById(`lineStatKey_${i}`);
+  return select ? [select.value] : [line.statKeys[0]];
+}
+
+function seedForLine(line, statKeys) {
+  return statKeys.reduce((sum, k) => sum + (lastParsedWeights?.[k] ?? 0), 0);
+}
 
 window.onEventSelect = function () {
   clearEventError();
@@ -591,11 +611,20 @@ window.onEventSelect = function () {
     </thead><tbody>`;
 
   lines.forEach((line, i) => {
-    const seedWeight = lastParsedWeights?.[line.statKey] ?? 0;
-    lineSeedWeights[line.statKey] = seedWeight;
+    const seedWeight = seedForLine(line, line.statKeys);
+    lineSeedWeights[line.name] = seedWeight;
+
+    const statKeyCell = line.statKeyOptions
+      ? `<select class="num-input" id="lineStatKey_${i}" style="width:100%" onchange="onLineStatKeyChange(${i})">
+           ${line.statKeyOptions.map((k) =>
+             `<option value="${k}" ${k === line.statKeys[0] ? "selected" : ""}>${k}</option>`
+           ).join("")}
+         </select>`
+      : line.statKeys.join(" + ") || "—";
+
     html += `<tr>
       <td class="stat-name">${line.name}</td>
-      <td class="stat-name">${line.statKey}</td>
+      <td class="stat-name">${statKeyCell}</td>
       <td class="qty-cell">
         <input class="row-qty" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}">
       </td>
@@ -607,6 +636,19 @@ window.onEventSelect = function () {
 
   html += `</tbody></table>`;
   wrap.innerHTML = html;
+};
+
+/**
+ * Re-seed a single line's weight when its stat-key dropdown changes — an
+ * explicit user action, so the new seed always overwrites the current value.
+ */
+window.onLineStatKeyChange = function (i) {
+  const eventName = document.getElementById("eventSelect").value;
+  const line = EVENT_CONFIGS[eventName].lines[i];
+  const keys = currentStatKeys(line, i);
+  const seedWeight = seedForLine(line, keys);
+  document.getElementById(`lineWeight_${i}`).value = seedWeight;
+  lineSeedWeights[line.name] = seedWeight;
 };
 
 /**
@@ -622,13 +664,14 @@ function reseedLinesTable() {
   lines.forEach((line, i) => {
     const input = document.getElementById(`lineWeight_${i}`);
     if (!input) return;
+    const keys = currentStatKeys(line, i);
     const currentVal = parseFloat(input.value);
-    const prevSeed   = lineSeedWeights[line.statKey] ?? 0;
-    const newSeed    = lastParsedWeights?.[line.statKey] ?? 0;
+    const prevSeed   = lineSeedWeights[line.name] ?? 0;
+    const newSeed    = seedForLine(line, keys);
     if (isNaN(currentVal) || currentVal === prevSeed) {
       input.value = newSeed;
     }
-    lineSeedWeights[line.statKey] = newSeed;
+    lineSeedWeights[line.name] = newSeed;
   });
 }
 
@@ -636,14 +679,16 @@ window.runOptimize = function () {
   clearEventError();
 
   const eventName          = document.getElementById("eventSelect").value;
-  const maxPointsPerDay    = parseFloat(document.getElementById("maxPointsPerDayInput").value);
-  const maxLifetimePoints  = parseFloat(document.getElementById("maxLifetimePointsInput").value);
+  const pointsPerClaim     = parseFloat(document.getElementById("pointsPerClaimInput").value);
+  const maxClaimsPerWeek   = parseFloat(document.getElementById("maxClaimsPerWeekInput").value);
+  const maxLifetimeClaims  = parseFloat(document.getElementById("maxLifetimeClaimsInput").value);
   const weeklyBonusPoints  = parseFloat(document.getElementById("weeklyBonusInput").value) || 0;
   const numWeeks           = parseInt(document.getElementById("numWeeksInput").value, 10);
 
   if (!eventName)                 { showEventError("No event configured — check maple-constants/event-configs.json."); return; }
-  if (isNaN(maxPointsPerDay) || maxPointsPerDay < 0)     { showEventError("Enter a valid max points/day."); return; }
-  if (isNaN(maxLifetimePoints) || maxLifetimePoints < 0) { showEventError("Enter a valid lifetime point cap."); return; }
+  if (isNaN(pointsPerClaim) || pointsPerClaim < 0)       { showEventError("Enter a valid points/claim."); return; }
+  if (isNaN(maxClaimsPerWeek) || maxClaimsPerWeek < 0)   { showEventError("Enter a valid max claims/week."); return; }
+  if (isNaN(maxLifetimeClaims) || maxLifetimeClaims < 0) { showEventError("Enter a valid lifetime claim cap."); return; }
   if (isNaN(numWeeks) || numWeeks < 1)                   { showEventError("Enter a valid number of weeks."); return; }
 
   const lines = EVENT_CONFIGS[eventName].lines;
@@ -654,11 +699,11 @@ window.runOptimize = function () {
   lines.forEach((line, i) => {
     const weightVal   = parseFloat(document.getElementById(`lineWeight_${i}`).value);
     const reservedVal = parseInt(document.getElementById(`lineReserved_${i}`).value, 10);
-    weights[line.statKey] = isNaN(weightVal) ? 0 : weightVal;
+    weights[line.name] = isNaN(weightVal) ? 0 : weightVal;
     reservedLevels[line.name] = isNaN(reservedVal) ? 0 : reservedVal;
   });
 
-  const incomeByWeek = computeWeeklyIncome({ maxPointsPerDay, maxLifetimePoints, weeklyBonusPoints, numWeeks });
+  const incomeByWeek = computeWeeklyIncome({ pointsPerClaim, maxClaimsPerWeek, maxLifetimeClaims, weeklyBonusPoints, numWeeks });
 
   try {
     const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels });
