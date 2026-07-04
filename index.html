@@ -278,8 +278,8 @@ Boss Damage	40	3.725%
   <span class="input-label">Lifetime claim cap</span>
   <input class="num-input" id="maxLifetimeClaimsInput" type="number" min="0" step="any" value="60">
 
-  <span class="input-label">Weekly paid pts</span>
-  <input class="num-input" id="weeklyBonusInput" type="number" min="0" step="any" value="0">
+  <span class="input-label">Total paid pts</span>
+  <input class="num-input" id="totalPaidPointsInput" type="number" min="0" step="any" value="0">
 
   <span class="input-label">Weeks</span>
   <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="12" style="width:64px">
@@ -686,11 +686,13 @@ function reseedLinesTable() {
 window.runOptimize = function () {
   clearEventError();
 
+  const MAX_PAID_POINTS_PER_WEEK = 5;
+
   const eventName          = document.getElementById("eventSelect").value;
   const pointsPerClaim     = parseFloat(document.getElementById("pointsPerClaimInput").value);
   const maxClaimsPerWeek   = parseFloat(document.getElementById("maxClaimsPerWeekInput").value);
   const maxLifetimeClaims  = parseFloat(document.getElementById("maxLifetimeClaimsInput").value);
-  const weeklyBonusPoints  = parseFloat(document.getElementById("weeklyBonusInput").value) || 0;
+  const totalPaidPoints    = parseFloat(document.getElementById("totalPaidPointsInput").value) || 0;
   const numWeeks           = parseInt(document.getElementById("numWeeksInput").value, 10);
 
   if (!eventName)                 { showEventError("No event configured — check maple-constants/event-configs.json."); return; }
@@ -698,6 +700,15 @@ window.runOptimize = function () {
   if (isNaN(maxClaimsPerWeek) || maxClaimsPerWeek < 0)   { showEventError("Enter a valid max claims/week."); return; }
   if (isNaN(maxLifetimeClaims) || maxLifetimeClaims < 0) { showEventError("Enter a valid lifetime claim cap."); return; }
   if (isNaN(numWeeks) || numWeeks < 1)                   { showEventError("Enter a valid number of weeks."); return; }
+
+  const maxAllowedPaidPoints = MAX_PAID_POINTS_PER_WEEK * numWeeks;
+  if (totalPaidPoints > maxAllowedPaidPoints) {
+    showEventError(
+      `Total paid points (${totalPaidPoints}) exceeds what the event allows: ` +
+      `${MAX_PAID_POINTS_PER_WEEK} pts/week x ${numWeeks} weeks = ${maxAllowedPaidPoints}.`
+    );
+    return;
+  }
 
   const lines = EVENT_CONFIGS[eventName].lines;
 
@@ -711,7 +722,10 @@ window.runOptimize = function () {
     reservedLevels[line.name] = isNaN(reservedVal) ? 0 : reservedVal;
   });
 
-  const incomeByWeek = computeWeeklyIncome({ pointsPerClaim, maxClaimsPerWeek, maxLifetimeClaims, weeklyBonusPoints, numWeeks });
+  const incomeByWeek = computeWeeklyIncome({
+    pointsPerClaim, maxClaimsPerWeek, maxLifetimeClaims, numWeeks,
+    totalPaidPoints, maxPaidPointsPerWeek: MAX_PAID_POINTS_PER_WEEK,
+  });
 
   try {
     const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels });

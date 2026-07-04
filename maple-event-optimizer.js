@@ -14,9 +14,9 @@
  * Primary export: optimizeEvent(lines, weights, budget)
  * Also exported: computeWeeklyIncome(...) for building the incomeByWeek
  * array from a per-claim + per-week-claim-cap + lifetime-claim-cap +
- * recurring-weekly-bonus income model (the shape most MapleStory events
- * actually use — e.g. "5 points per claim, up to 5 claims a week, 60
- * claims total across the event").
+ * one-time-total-paid-points income model (the shape most MapleStory events
+ * actually use — e.g. "5 points per claim, up to 5 claims a week, 60 claims
+ * total across the event, plus whatever you bought with real money").
  */
 
 // ---------------------------------------------------------------------------
@@ -264,14 +264,17 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
  * Build a week-by-week income array for the common MapleStory event income
  * shape: a fixed-size claim (e.g. "5 points") claimable up to a limited
  * number of times per week, capped by a lifetime total number of claims
- * across the whole event, plus a recurring bonus (e.g. a cash-shop
- * purchase) added every week regardless of the lifetime cap.
+ * across the whole event, plus a total pool of paid points (e.g. from
+ * cash-shop purchases) that's also capped per week (e.g. 5/week) and
+ * front-loaded — spent at the max weekly rate starting week 1 until the
+ * pool runs out (12 total points with a 5/week cap buys 5, 5, then 2).
  *
  * @param {{
- *   pointsPerClaim: number,      // points granted per claim (e.g. 5)
- *   maxClaimsPerWeek: number,    // claims allowed per week (e.g. 5, for 25 pts/week)
- *   maxLifetimeClaims: number,   // total claims allowed across the whole event (e.g. 60)
- *   weeklyBonusPoints?: number,  // extra points added every week regardless of the lifetime cap
+ *   pointsPerClaim: number,        // points granted per claim (e.g. 5)
+ *   maxClaimsPerWeek: number,      // claims allowed per week (e.g. 5, for 25 pts/week)
+ *   maxLifetimeClaims: number,     // total claims allowed across the whole event (e.g. 60)
+ *   totalPaidPoints?: number,      // total pool of paid points to spend across the event
+ *   maxPaidPointsPerWeek?: number, // max paid points spendable in a single week (defaults to 5)
  *   numWeeks: number,
  * }} params
  * @returns {number[]} incomeByWeek, length numWeeks
@@ -280,16 +283,22 @@ export function computeWeeklyIncome({
   pointsPerClaim,
   maxClaimsPerWeek,
   maxLifetimeClaims,
-  weeklyBonusPoints = 0,
+  totalPaidPoints = 0,
+  maxPaidPointsPerWeek = 5,
   numWeeks,
 }) {
   const incomeByWeek = [];
   let claimsSoFar = 0;
+  let paidRemaining = totalPaidPoints;
 
   for (let week = 1; week <= numWeeks; week++) {
     const claimsThisWeek = Math.max(0, Math.min(maxClaimsPerWeek, maxLifetimeClaims - claimsSoFar));
     claimsSoFar += claimsThisWeek;
-    incomeByWeek.push(claimsThisWeek * pointsPerClaim + weeklyBonusPoints);
+
+    const paidThisWeek = Math.max(0, Math.min(maxPaidPointsPerWeek, paidRemaining));
+    paidRemaining -= paidThisWeek;
+
+    incomeByWeek.push(claimsThisWeek * pointsPerClaim + paidThisWeek);
   }
 
   return incomeByWeek;
