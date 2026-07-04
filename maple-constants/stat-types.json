@@ -1,0 +1,30 @@
+{
+  "str": {
+    "main": ["STR"],
+    "secondary": ["DEX"]
+  },
+  "dex": {
+    "main": ["DEX"],
+    "secondary": ["STR"]
+  },
+  "int": {
+    "main": ["INT"],
+    "secondary": ["LUK"]
+  },
+  "luk": {
+    "main": ["LUK"],
+    "secondary": ["DEX"]
+  },
+  "melee_thief": {
+    "main": ["LUK"],
+    "secondary": ["DEX", "STR"]
+  },
+  "xenon": {
+    "main": ["STR", "DEX", "LUK"],
+    "secondary": []
+  },
+  "hp": {
+    "main": ["HP"],
+    "secondary": ["STR"]
+  }
+}

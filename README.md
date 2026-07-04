@@ -132,4 +132,4 @@ All Stat%	9	0.752%
 ```
 
 
-Variables are in maple-constants.js.
+Variables are in the maple-constants/ folder (class-stats.json, stat-types.json).

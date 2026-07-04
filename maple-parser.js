@@ -7,7 +7,7 @@
  * Returns a structured result object or throws on bad input.
  */
 
-import { CLASS_STATS, STAT_TYPES } from "./maple-constants.js";
+import { CLASS_STATS, STAT_TYPES } from "./maple-constants/index.js";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -158,7 +158,7 @@ export function parse(rawText, className) {
   // --- validate class ---
   const statType = CLASS_STATS[className];
   if (!statType) {
-    throw new Error(`Unknown class: "${className}". Check maple-constants.js for valid names.`);
+    throw new Error(`Unknown class: "${className}". Check maple-constants/ for valid names.`);
   }
 
   const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
