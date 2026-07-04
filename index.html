@@ -345,7 +345,7 @@ Boss Damage	40	3.725%
   <span class="toolbar-title">🍁 Event Stat Optimizer</span>
 
   <div class="help-wrap">
-    <button class="help-btn" id="helpBtn" onclick="toggleHelp()" aria-label="How to use the Event Optimizer">?</button>
+    <button class="help-btn" id="helpBtn" onclick="toggleHelp('helpPopover')" aria-label="How to use the Event Optimizer">?</button>
     <div class="help-popover" id="helpPopover">
       <div class="help-title">How this works</div>
       <ol>
@@ -365,9 +365,15 @@ Boss Damage	40	3.725%
 
   <div class="divider"></div>
 
-  <div class="input-cluster">
-    <button class="btn-ghost" onclick="loadReasonableDefault()">Reasonable Default</button>
-    <button class="help-btn" type="button" title="111k Phantom configuration" aria-label="About Reasonable Default">?</button>
+  <div class="help-wrap">
+    <button class="btn-primary" onclick="loadReasonableDefault()">Load Reasonable Default</button>
+    <button class="help-btn" id="rdHelpBtn" onclick="toggleHelp('rdHelpPopover')" aria-label="About Reasonable Default">?</button>
+    <div class="help-popover" id="rdHelpPopover" style="width:260px">
+      <div class="help-title">Reasonable Default</div>
+      <p style="font-size:13px;line-height:1.5;color:var(--text);margin:0;">
+        A known-good <strong>111k Phantom</strong> FD stat table, for quick testing without a Scouter export handy.
+      </p>
+    </div>
   </div>
 
   <div class="divider"></div>
@@ -561,8 +567,8 @@ function isHelpDismissed() {
   try { return localStorage.getItem(HELP_DISMISSED_KEY) === "1"; } catch { return false; }
 }
 
-window.toggleHelp = function () {
-  document.getElementById("helpPopover")?.classList.toggle("open");
+window.toggleHelp = function (popoverId) {
+  document.getElementById(popoverId)?.classList.toggle("open");
 };
 
 window.onHelpDismissToggle = function () {
@@ -578,7 +584,10 @@ function maybeAutoOpenHelp() {
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".help-wrap")) document.getElementById("helpPopover")?.classList.remove("open");
+  document.querySelectorAll(".help-popover.open").forEach((popover) => {
+    const wrap = popover.closest(".help-wrap");
+    if (wrap && !wrap.contains(e.target)) popover.classList.remove("open");
+  });
 });
 
 function updateBadge() {
