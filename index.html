@@ -107,7 +107,10 @@
   }
   .status-chip.ready { color: var(--green); border-color: var(--green); }
 
-  .help-wrap { position: relative; }
+  .help-wrap {
+    position: relative; display: inline-flex; align-items: center;
+    gap: 6px; flex-shrink: 0;
+  }
   .help-btn {
     width: 20px; height: 20px; border-radius: 50%; padding: 0;
     background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent);
@@ -371,7 +374,7 @@ Boss Damage	40	3.725%
     <div class="help-popover" id="rdHelpPopover" style="width:260px">
       <div class="help-title">Reasonable Default</div>
       <p style="font-size:13px;line-height:1.5;color:var(--text);margin:0;">
-        A known-good <strong>111k Phantom</strong> FD stat table, for quick testing without a Scouter export handy.
+        A <strong>111k Phantom</strong> FD stat table, for quick testing without a Scouter export handy.
       </p>
     </div>
   </div>
