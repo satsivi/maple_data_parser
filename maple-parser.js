@@ -15,20 +15,24 @@ import { CLASS_STATS, STAT_TYPES } from "./maple-constants/index.js";
 
 const STAT_ABBRS = ["STR", "DEX", "INT", "LUK", "HP"];
 
-// Matches a tab (with any surrounding spaces) or a run of 2+ plain spaces.
-// Pasted tables sometimes lose their tabs and arrive as space-padded columns
+// Matches a tab or a run of 4+ spaces (incl. non-breaking spaces, which
+// copy-pasted tables sometimes use in place of regular spaces). Pasted
+// tables sometimes lose their tabs and arrive as space-padded columns
 // instead, so a single-space delimiter can't be used — labels like
 // "Boss Damage" and "Not Affected by % STR" contain single spaces internally.
-const COLUMN_SEP = /[ \t]*\t[ \t]*|[ ]{2,}/;
+const COLUMN_SEP = /\t|[  ]{4,}/g;
 
 /**
  * Split a pasted row into columns, tolerating tabs or space-padded columns.
+ * Sanitizes by replacing the delimiter with "|" first, then splitting on it —
+ * this keeps the split behavior identical regardless of how many delimiter
+ * characters run together.
  *
  * @param {string} line
  * @returns {string[]}
  */
 function splitColumns(line) {
-  return line.split(COLUMN_SEP).map((part) => part.trim());
+  return line.replace(COLUMN_SEP, "|").split("|").map((part) => part.trim());
 }
 
 /**
