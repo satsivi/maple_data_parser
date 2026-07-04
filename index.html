@@ -690,6 +690,18 @@ function reseedLinesTable() {
 window.runOptimize = function () {
   clearEventError();
 
+  if (!lastParsedWeights) {
+    showEventError('Parse a "Final Damage%" stat table on the Stat Parser tab first.');
+    return;
+  }
+  if (parsedEquivType !== "final_damage") {
+    showEventError(
+      'The last parsed table used Main Stat equivalence, not Final Damage%. ' +
+      'The Event Optimizer only works with FD weights — parse a table with "Final Damage%" as the 3rd column first.'
+    );
+    return;
+  }
+
   const MAX_PAID_POINTS_PER_WEEK = 5;
 
   const eventName          = document.getElementById("eventSelect").value;
