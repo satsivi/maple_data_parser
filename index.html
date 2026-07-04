@@ -300,9 +300,8 @@ Boss Damage	40	3.725%
 </div>
 
 <script type="module">
-import { CLASS_NAMES, CLASS_STATS, STAT_TYPES } from "./maple-constants/index.js";
+import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES } from "./maple-constants/index.js";
 import { parse } from "./maple-parser.js";
-import { EVENT_CONFIGS, EVENT_NAMES } from "./maple-event-constants.js";
 import { optimizeEvent } from "./maple-event-optimizer.js";
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
@@ -555,7 +554,7 @@ window.runOptimize = function () {
   const bonusPoints  = parseFloat(document.getElementById("bonusPointsInput").value) || 0;
   const bonusWeek    = parseInt(document.getElementById("bonusWeekInput").value, 10) || 1;
 
-  if (!eventName)               { showEventError("No event configured — check maple-event-constants.js."); return; }
+  if (!eventName)               { showEventError("No event configured — check maple-constants/event-configs.json."); return; }
   if (isNaN(weeklyIncome) || weeklyIncome < 0) { showEventError("Enter a valid weekly income."); return; }
   if (isNaN(numWeeks) || numWeeks < 1)         { showEventError("Enter a valid number of weeks."); return; }
 

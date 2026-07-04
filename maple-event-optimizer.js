@@ -2,7 +2,7 @@
  * maple-event-optimizer.js
  *
  * Pure logic, no DOM. Given a set of event stat lines (see
- * maple-event-constants.js for the schema), the FD weights produced by
+ * maple-constants/event-configs.json for the schema), the FD weights produced by
  * maple-parser.js's parse(), and a currency budget shape (weekly income,
  * number of weeks, an optional one-time bonus landing in a specific week),
  * computes which levels to buy to maximize total FD gain by the end of the
