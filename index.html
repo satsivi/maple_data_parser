@@ -265,21 +265,21 @@ Boss Damage	40	3.725%
   <span class="toolbar-title">📅 Event Stat Optimizer</span>
 
   <span class="input-label">Event</span>
-  <select class="num-input" id="eventSelect" style="width:160px"></select>
+  <select class="num-input" id="eventSelect" style="width:160px" onchange="onEventSelect()"></select>
 
   <div class="divider"></div>
 
-  <span class="input-label">Weekly income</span>
-  <input class="num-input" id="weeklyIncomeInput" type="number" min="0" step="any" value="0">
+  <span class="input-label">Max points/day</span>
+  <input class="num-input" id="maxPointsPerDayInput" type="number" min="0" step="any" value="0">
+
+  <span class="input-label">Lifetime cap</span>
+  <input class="num-input" id="maxLifetimePointsInput" type="number" min="0" step="any" value="0">
+
+  <span class="input-label">Weekly bonus</span>
+  <input class="num-input" id="weeklyBonusInput" type="number" min="0" step="any" value="0">
 
   <span class="input-label">Weeks</span>
   <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="1" style="width:64px">
-
-  <span class="input-label">Bonus points</span>
-  <input class="num-input" id="bonusPointsInput" type="number" min="0" step="any" value="0">
-
-  <span class="input-label">Bonus week</span>
-  <input class="num-input" id="bonusWeekInput" type="number" min="1" step="1" value="1" style="width:64px">
 
   <div class="divider"></div>
 
@@ -290,10 +290,26 @@ Boss Damage	40	3.725%
   <div class="spacer"></div>
 </div>
 
-<div class="event-body" id="eventBody">
-  <div class="event-summary" id="eventSummary"></div>
-  <div id="eventScheduleWrap">
-    <div class="empty-state">Parse a stat table on the Parser tab, then run the optimizer.</div>
+<div class="body">
+  <div class="left-col" style="grid-template-rows: 1fr">
+    <div class="panel">
+      <div class="panel-label">Event Lines — FD weight &amp; reserved levels</div>
+      <div class="table-scroll" id="linesTableWrap">
+        <div class="empty-state">Select an event to configure its lines.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="col-header">
+      <div class="panel-label">Purchase Schedule</div>
+    </div>
+    <div class="event-body" id="eventBody">
+      <div class="event-summary" id="eventSummary"></div>
+      <div class="table-scroll" id="eventScheduleWrap">
+        <div class="empty-state">Configure lines and click Optimize.</div>
+      </div>
+    </div>
   </div>
 </div>
 </div>
@@ -302,7 +318,7 @@ Boss Damage	40	3.725%
 <script type="module">
 import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES } from "./maple-constants/index.js";
 import { parse } from "./maple-parser.js";
-import { optimizeEvent } from "./maple-event-optimizer.js";
+import { optimizeEvent, computeWeeklyIncome } from "./maple-event-optimizer.js";
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
 window.showTab = function (tab) {
@@ -311,6 +327,7 @@ window.showTab = function (tab) {
   document.getElementById("eventView").style.display   = isParser ? "none" : "";
   document.getElementById("tabBtnParser").classList.toggle("active", isParser);
   document.getElementById("tabBtnEvent").classList.toggle("active", !isParser);
+  if (!isParser) reseedLinesTable();
 };
 
 // ── autocomplete ────────────────────────────────────────────────────────────
@@ -430,6 +447,7 @@ window.runParse = function () {
     parsedEquivType = result.equivalence_type;
     lastParsedWeights = result.weights;
     renderTable();
+    reseedLinesTable();
   } catch (err) {
     showError(err.message);
   }
@@ -538,32 +556,112 @@ function populateEventSelect() {
   select.innerHTML = EVENT_NAMES.map((n) =>
     `<option value="${n}">${displayName(n)}</option>`
   ).join("");
+  onEventSelect();
+}
+
+// ── event lines table (editable FD weight + reserved levels per line) ──────────
+// lineSeedWeights tracks the last value each row was auto-seeded with, keyed
+// by statKey, so reseedLinesTable() can tell "still at the seed, safe to
+// refresh" apart from "user hand-edited this, leave it alone".
+let lineSeedWeights = {};
+
+window.onEventSelect = function () {
+  clearEventError();
+  document.getElementById("eventSummary").classList.remove("visible");
+  document.getElementById("eventScheduleWrap").innerHTML =
+    '<div class="empty-state">Configure lines and click Optimize.</div>';
+
+  const eventName = document.getElementById("eventSelect").value;
+  const wrap = document.getElementById("linesTableWrap");
+  if (!eventName) {
+    wrap.innerHTML = '<div class="empty-state">No event configured — check maple-constants/event-configs.json.</div>';
+    return;
+  }
+
+  const lines = EVENT_CONFIGS[eventName].lines;
+  lineSeedWeights = {};
+  let html = `<table>
+    <thead>
+      <tr>
+        <th>Line</th>
+        <th>Stat key</th>
+        <th class="r">FD weight</th>
+        <th class="r">Reserved levels</th>
+      </tr>
+    </thead><tbody>`;
+
+  lines.forEach((line, i) => {
+    const seedWeight = lastParsedWeights?.[line.statKey] ?? 0;
+    lineSeedWeights[line.statKey] = seedWeight;
+    html += `<tr>
+      <td class="stat-name">${line.name}</td>
+      <td class="stat-name">${line.statKey}</td>
+      <td class="qty-cell">
+        <input class="row-qty" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}">
+      </td>
+      <td class="qty-cell">
+        <input class="row-qty" id="lineReserved_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0">
+      </td>
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  wrap.innerHTML = html;
+};
+
+/**
+ * Refresh each row's FD weight from lastParsedWeights, but only for rows the
+ * user hasn't hand-edited away from their last seed value — preserves
+ * manual overrides across re-parses and tab switches.
+ */
+function reseedLinesTable() {
+  const eventName = document.getElementById("eventSelect")?.value;
+  if (!eventName) return;
+  const lines = EVENT_CONFIGS[eventName].lines;
+
+  lines.forEach((line, i) => {
+    const input = document.getElementById(`lineWeight_${i}`);
+    if (!input) return;
+    const currentVal = parseFloat(input.value);
+    const prevSeed   = lineSeedWeights[line.statKey] ?? 0;
+    const newSeed    = lastParsedWeights?.[line.statKey] ?? 0;
+    if (isNaN(currentVal) || currentVal === prevSeed) {
+      input.value = newSeed;
+    }
+    lineSeedWeights[line.statKey] = newSeed;
+  });
 }
 
 window.runOptimize = function () {
   clearEventError();
 
-  if (!lastParsedWeights) {
-    showEventError("Parse a stat table on the Parser tab first.");
-    return;
-  }
+  const eventName          = document.getElementById("eventSelect").value;
+  const maxPointsPerDay    = parseFloat(document.getElementById("maxPointsPerDayInput").value);
+  const maxLifetimePoints  = parseFloat(document.getElementById("maxLifetimePointsInput").value);
+  const weeklyBonusPoints  = parseFloat(document.getElementById("weeklyBonusInput").value) || 0;
+  const numWeeks           = parseInt(document.getElementById("numWeeksInput").value, 10);
 
-  const eventName    = document.getElementById("eventSelect").value;
-  const weeklyIncome = parseFloat(document.getElementById("weeklyIncomeInput").value);
-  const numWeeks     = parseInt(document.getElementById("numWeeksInput").value, 10);
-  const bonusPoints  = parseFloat(document.getElementById("bonusPointsInput").value) || 0;
-  const bonusWeek    = parseInt(document.getElementById("bonusWeekInput").value, 10) || 1;
-
-  if (!eventName)               { showEventError("No event configured — check maple-constants/event-configs.json."); return; }
-  if (isNaN(weeklyIncome) || weeklyIncome < 0) { showEventError("Enter a valid weekly income."); return; }
-  if (isNaN(numWeeks) || numWeeks < 1)         { showEventError("Enter a valid number of weeks."); return; }
+  if (!eventName)                 { showEventError("No event configured — check maple-constants/event-configs.json."); return; }
+  if (isNaN(maxPointsPerDay) || maxPointsPerDay < 0)     { showEventError("Enter a valid max points/day."); return; }
+  if (isNaN(maxLifetimePoints) || maxLifetimePoints < 0) { showEventError("Enter a valid lifetime point cap."); return; }
+  if (isNaN(numWeeks) || numWeeks < 1)                   { showEventError("Enter a valid number of weeks."); return; }
 
   const lines = EVENT_CONFIGS[eventName].lines;
 
+  // Read the current (possibly hand-edited) weight/reserved values straight off the table.
+  const weights = {};
+  const reservedLevels = {};
+  lines.forEach((line, i) => {
+    const weightVal   = parseFloat(document.getElementById(`lineWeight_${i}`).value);
+    const reservedVal = parseInt(document.getElementById(`lineReserved_${i}`).value, 10);
+    weights[line.statKey] = isNaN(weightVal) ? 0 : weightVal;
+    reservedLevels[line.name] = isNaN(reservedVal) ? 0 : reservedVal;
+  });
+
+  const incomeByWeek = computeWeeklyIncome({ maxPointsPerDay, maxLifetimePoints, weeklyBonusPoints, numWeeks });
+
   try {
-    const result = optimizeEvent(lines, lastParsedWeights, {
-      weeklyIncome, numWeeks, bonusPoints, bonusWeek,
-    });
+    const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels });
     renderEventResult(result);
   } catch (err) {
     showEventError(err.message);

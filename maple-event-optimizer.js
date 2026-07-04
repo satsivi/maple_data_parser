@@ -2,14 +2,18 @@
  * maple-event-optimizer.js
  *
  * Pure logic, no DOM. Given a set of event stat lines (see
- * maple-constants/event-configs.json for the schema), the FD weights produced by
- * maple-parser.js's parse(), and a currency budget shape (weekly income,
- * number of weeks, an optional one-time bonus landing in a specific week),
- * computes which levels to buy to maximize total FD gain by the end of the
- * event, and a week-by-week purchase schedule that respects per-line level
+ * maple-constants/event-configs.json for the schema), an FD weight per stat
+ * key (seeded from maple-parser.js's parse() output but editable by the
+ * user for stats the parser can't derive), an optional set of reserved
+ * level counts per line, and a week-by-week currency income array, computes
+ * which levels to buy to maximize total FD gain by the end of the event,
+ * plus a week-by-week purchase schedule that respects per-line level
  * ordering and cumulative currency availability.
  *
  * Primary export: optimizeEvent(lines, weights, budget)
+ * Also exported: computeWeeklyIncome(...) for building the incomeByWeek
+ * array from a daily-claim + lifetime-cap + recurring-weekly-bonus income
+ * model (the shape most MapleStory events actually use).
  */
 
 // ---------------------------------------------------------------------------
@@ -63,33 +67,48 @@ function buildPrefixSums(steps, fdPerUnit) {
  * (you can't skip level 2 to buy level 3), so each line contributes one
  * "prefix length" choice — this is a grouped / multiple-choice knapsack.
  *
+ * A line whose statKey has no entry in `weights` is treated as contributing
+ * 0 FD per unit rather than throwing — this lets callers include lines the
+ * parser can't derive a weight for (e.g. Critical Rate, which only matters
+ * for some classes) and simply leave them at 0 unless the user fills in a
+ * value by hand.
+ *
  * @param {Array<{ name: string, statKey: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
- * @param {Record<string, number>} weights - FD weights, e.g. from parse().weights
+ * @param {Record<string, number>} weights - FD weights, e.g. from parse().weights, keyed by statKey
  * @param {number} totalBudget - integer currency budget
+ * @param {Record<string, number>} [reservedLevels] - line name -> minimum number of levels that must be bought
  * @returns {{
  *   totalFd: number,
  *   chosenLevels: Record<string, number>,   // line name -> number of levels bought
  *   linePrefixes: Record<string, Array<{cost:number, fd:number}>>,
  *   lineSteps: Record<string, Array<{level:number, cost:number, statGain:number}>>,
  * }}
- * @throws {Error} if a line's statKey is not present in weights
+ * @throws {Error} if reserved levels alone cost more than totalBudget
  */
-export function optimizeAllocation(lines, weights, totalBudget) {
+export function optimizeAllocation(lines, weights, totalBudget, reservedLevels = {}) {
   const budget = Math.floor(totalBudget);
 
   const linePrefixes = {};
   const lineSteps = {};
+  const minK = {};
 
+  let reservedCost = 0;
   for (const line of lines) {
-    if (!(line.statKey in weights)) {
-      throw new Error(
-        `No FD weight found for stat "${line.statKey}" (line "${line.name}"). ` +
-        `Parse a stat table that includes this stat first.`
-      );
-    }
+    const fdPerUnit = weights[line.statKey] ?? 0;
     const steps = computeMarginalSteps(line);
     lineSteps[line.name] = steps;
-    linePrefixes[line.name] = buildPrefixSums(steps, weights[line.statKey]);
+    const prefixes = buildPrefixSums(steps, fdPerUnit);
+    linePrefixes[line.name] = prefixes;
+
+    const reserved = Math.min(reservedLevels[line.name] ?? 0, steps.length);
+    minK[line.name] = reserved;
+    reservedCost += prefixes[reserved].cost;
+  }
+
+  if (reservedCost > budget) {
+    throw new Error(
+      `Reserved levels cost ${reservedCost}, which exceeds the total budget of ${budget}.`
+    );
   }
 
   // dp[c] = max total FD achievable with exactly budget c spent so far
@@ -101,13 +120,14 @@ export function optimizeAllocation(lines, weights, totalBudget) {
 
   for (const line of lines) {
     const prefixes = linePrefixes[line.name];
+    const startK = minK[line.name];
     const nextDp = new Array(budget + 1).fill(-Infinity);
-    const choices = new Array(budget + 1).fill(0);
+    const choices = new Array(budget + 1).fill(startK);
 
     for (let c = 0; c <= budget; c++) {
       let best = -Infinity;
-      let bestK = 0;
-      for (let k = 0; k < prefixes.length; k++) {
+      let bestK = startK;
+      for (let k = startK; k < prefixes.length; k++) {
         const { cost, fd } = prefixes[k];
         if (cost > c) break; // prefixes sorted by increasing cost
         const candidate = dp[c - cost] + fd;
@@ -124,11 +144,14 @@ export function optimizeAllocation(lines, weights, totalBudget) {
     choiceHistory.push(choices);
   }
 
-  // Find the best capacity (spending less than the full budget can never
-  // beat spending more, but dp is monotonic non-decreasing in c anyway).
-  let bestCapacity = 0;
+  // Find the best capacity among those that are actually reachable (a
+  // reachable capacity has a finite dp value; capacities too small to cover
+  // every line's reserved levels stay -Infinity).
+  let bestCapacity = -1;
   for (let c = 0; c <= budget; c++) {
-    if (dp[c] >= dp[bestCapacity]) bestCapacity = c;
+    if (dp[c] > -Infinity && (bestCapacity === -1 || dp[c] >= dp[bestCapacity])) {
+      bestCapacity = c;
+    }
   }
 
   // Reconstruct chosen level counts per line by walking choiceHistory backwards.
@@ -156,31 +179,33 @@ export function optimizeAllocation(lines, weights, totalBudget) {
 /**
  * Turn a chosen allocation into a concrete week-by-week purchase order.
  * Selected steps are sorted by FD-per-cost ratio (best value first); each
- * week adds income to a running balance and greedily buys any affordable
- * selected step, respecting that a line's levels must be bought in order.
+ * week adds that week's income to a running balance and greedily buys any
+ * affordable selected step, respecting that a line's levels must be bought
+ * in order.
  *
  * @param {Array<{ name: string, statKey: string }>} lines
  * @param {Record<string, number>} chosenLevels - line name -> levels bought
  * @param {Record<string, Array<{level:number, cost:number, statGain:number}>>} lineSteps
  * @param {Record<string, number>} weights
- * @param {{ weeklyIncome: number, numWeeks: number, bonusPoints?: number, bonusWeek?: number }} budget
+ * @param {{ incomeByWeek: number[] }} budget
  * @returns {{ weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>, totalFdGained: number }}
  */
 export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, budget) {
-  const { weeklyIncome, numWeeks, bonusPoints = 0, bonusWeek = null } = budget;
+  const { incomeByWeek } = budget;
 
   // Flatten selected steps, keeping per-line order via a pointer per line.
   const remainingByLine = {};
   for (const line of lines) {
     const count = chosenLevels[line.name] || 0;
+    const fdPerUnit = weights[line.statKey] ?? 0;
     remainingByLine[line.name] = lineSteps[line.name]
       .slice(0, count)
       .map((step) => ({
         line: line.name,
         level: step.level,
         cost: step.cost,
-        fdGain: step.statGain * weights[line.statKey],
-        ratio: step.cost > 0 ? (step.statGain * weights[line.statKey]) / step.cost : Infinity,
+        fdGain: step.statGain * fdPerUnit,
+        ratio: step.cost > 0 ? (step.statGain * fdPerUnit) / step.cost : Infinity,
       }));
   }
 
@@ -190,9 +215,9 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
   const weeks = [];
   let totalFdGained = 0;
 
-  for (let week = 1; week <= numWeeks; week++) {
-    balance += weeklyIncome;
-    if (bonusWeek !== null && week === bonusWeek) balance += bonusPoints;
+  for (let i = 0; i < incomeByWeek.length; i++) {
+    const week = i + 1;
+    balance += incomeByWeek[i];
 
     const purchases = [];
     // Keep buying while something affordable remains.
@@ -229,6 +254,47 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
 }
 
 // ---------------------------------------------------------------------------
+// Income model
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a week-by-week income array for the common MapleStory event income
+ * shape: a daily free-currency claim capped both per-day and by a lifetime
+ * total, plus a recurring weekly bonus (e.g. a cash-shop purchase available
+ * every week).
+ *
+ * @param {{
+ *   maxPointsPerDay: number,     // free points obtainable per day (e.g. 5 claims x 5 pts = 25)
+ *   maxLifetimePoints: number,   // total free points obtainable across the whole event
+ *   weeklyBonusPoints?: number,  // extra points added every week regardless of the lifetime cap
+ *   daysPerWeek?: number,        // defaults to 7
+ *   numWeeks: number,
+ * }} params
+ * @returns {number[]} incomeByWeek, length numWeeks
+ */
+export function computeWeeklyIncome({
+  maxPointsPerDay,
+  maxLifetimePoints,
+  weeklyBonusPoints = 0,
+  daysPerWeek = 7,
+  numWeeks,
+}) {
+  const incomeByWeek = [];
+  let claimedSoFar = 0;
+
+  for (let week = 1; week <= numWeeks; week++) {
+    const freeThisWeek = Math.max(
+      0,
+      Math.min(maxPointsPerDay * daysPerWeek, maxLifetimePoints - claimedSoFar)
+    );
+    claimedSoFar += freeThisWeek;
+    incomeByWeek.push(freeThisWeek + weeklyBonusPoints);
+  }
+
+  return incomeByWeek;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -236,8 +302,8 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
  * Compute the optimal event-stat purchase schedule.
  *
  * @param {Array<{ name: string, statKey: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
- * @param {Record<string, number>} weights - FD weights, e.g. from parse().weights
- * @param {{ weeklyIncome: number, numWeeks: number, bonusPoints?: number, bonusWeek?: number }} budget
+ * @param {Record<string, number>} weights - FD weights, e.g. from parse().weights, keyed by statKey
+ * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number> }} budget
  * @returns {{
  *   weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>,
  *   totalFdGained: number,
@@ -245,11 +311,11 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
  * }}
  */
 export function optimizeEvent(lines, weights, budget) {
-  const { weeklyIncome, numWeeks, bonusPoints = 0 } = budget;
-  const totalBudget = weeklyIncome * numWeeks + bonusPoints;
+  const { incomeByWeek, reservedLevels = {} } = budget;
+  const totalBudget = incomeByWeek.reduce((sum, income) => sum + income, 0);
 
-  const { chosenLevels, lineSteps } = optimizeAllocation(lines, weights, totalBudget);
-  const schedule = buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, budget);
+  const { chosenLevels, lineSteps } = optimizeAllocation(lines, weights, totalBudget, reservedLevels);
+  const schedule = buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, { incomeByWeek });
 
   return { ...schedule, chosenLevels };
 }

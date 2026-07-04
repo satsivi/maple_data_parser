@@ -14,6 +14,7 @@
 import classStats from "./class-stats.json" with { type: "json" };
 import statTypes from "./stat-types.json" with { type: "json" };
 import eventConfigs from "./event-configs.json" with { type: "json" };
+import versions from "./versions.json" with { type: "json" };
 
 /**
  * Maps every class name (snake_case) to its stat type key.
@@ -90,3 +91,14 @@ export const EVENT_CONFIGS = eventConfigs;
  * @type {string[]}
  */
 export const EVENT_NAMES = Object.keys(EVENT_CONFIGS).sort();
+
+/**
+ * MapleStory patch versions. The raw data lives in ./versions.json; this
+ * file just loads and re-exports it. Each event config's `version` field
+ * should match a `version` value here.
+ *
+ * Dates aren't tracked yet — entries may later gain a `date` field.
+ *
+ * @type {Array<{ version: string, alias: string }>}
+ */
+export const VERSIONS = versions;

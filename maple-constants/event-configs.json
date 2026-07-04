@@ -1,13 +1,137 @@
 {
-  "example_event": {
+  "ride_the_lightning": {
+    "version": "v.269",
     "lines": [
       {
-        "name": "Attack Track",
+        "name": "Attack Power & Magic ATT",
         "statKey": "attack",
         "levels": [
-          { "level": 1, "cost": 100, "value": 10 },
-          { "level": 2, "cost": 150, "value": 20 },
-          { "level": 3, "cost": 220, "value": 35 }
+          { "level": 1, "cost": 1, "value": 5 },
+          { "level": 2, "cost": 2, "value": 10 },
+          { "level": 3, "cost": 5, "value": 15 },
+          { "level": 4, "cost": 12, "value": 20 },
+          { "level": 5, "cost": 25, "value": 30 },
+          { "level": 6, "cost": 30, "value": 40 }
+        ]
+      },
+      {
+        "name": "Boss Damage (%)",
+        "statKey": "boss_damage",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 5 },
+          { "level": 2, "cost": 2, "value": 10 },
+          { "level": 3, "cost": 5, "value": 15 },
+          { "level": 4, "cost": 12, "value": 20 },
+          { "level": 5, "cost": 25, "value": 30 },
+          { "level": 6, "cost": 30, "value": 40 }
+        ]
+      },
+      {
+        "name": "Ignore Defense (%)",
+        "statKey": "ied_300",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 5 },
+          { "level": 2, "cost": 2, "value": 10 },
+          { "level": 3, "cost": 5, "value": 15 },
+          { "level": 4, "cost": 12, "value": 20 },
+          { "level": 5, "cost": 25, "value": 30 },
+          { "level": 6, "cost": 30, "value": 40 }
+        ]
+      },
+      {
+        "name": "All Stats",
+        "statKey": "all_stat_pct",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 10 },
+          { "level": 2, "cost": 2, "value": 20 },
+          { "level": 3, "cost": 5, "value": 30 },
+          { "level": 4, "cost": 12, "value": 40 },
+          { "level": 5, "cost": 25, "value": 60 },
+          { "level": 6, "cost": 30, "value": 80 }
+        ]
+      },
+      {
+        "name": "HP/MP",
+        "statKey": "hp_mp",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 500 },
+          { "level": 2, "cost": 2, "value": 1000 },
+          { "level": 3, "cost": 5, "value": 1500 },
+          { "level": 4, "cost": 12, "value": 2000 },
+          { "level": 5, "cost": 25, "value": 3000 },
+          { "level": 6, "cost": 30, "value": 4000 }
+        ]
+      },
+      {
+        "name": "Buff Duration (%)",
+        "statKey": "buff_duration_pct",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 5 },
+          { "level": 2, "cost": 2, "value": 10 },
+          { "level": 3, "cost": 5, "value": 15 },
+          { "level": 4, "cost": 12, "value": 20 },
+          { "level": 5, "cost": 25, "value": 25 },
+          { "level": 6, "cost": 30, "value": 30 }
+        ]
+      },
+      {
+        "name": "Critical Rate (%)",
+        "statKey": "critical_rate_pct",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 5 },
+          { "level": 2, "cost": 2, "value": 10 },
+          { "level": 3, "cost": 5, "value": 15 },
+          { "level": 4, "cost": 12, "value": 20 },
+          { "level": 5, "cost": 25, "value": 25 },
+          { "level": 6, "cost": 30, "value": 30 }
+        ]
+      },
+      {
+        "name": "Normal Enemy Damage (%)",
+        "statKey": "normal_enemy_damage_pct",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 5 },
+          { "level": 2, "cost": 2, "value": 10 },
+          { "level": 3, "cost": 5, "value": 15 },
+          { "level": 4, "cost": 12, "value": 20 },
+          { "level": 5, "cost": 25, "value": 30 },
+          { "level": 6, "cost": 30, "value": 40 }
+        ]
+      },
+      {
+        "name": "Arcane Power",
+        "statKey": "arcane_power",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 10 },
+          { "level": 2, "cost": 2, "value": 20 },
+          { "level": 3, "cost": 5, "value": 30 },
+          { "level": 4, "cost": 12, "value": 40 },
+          { "level": 5, "cost": 25, "value": 50 },
+          { "level": 6, "cost": 30, "value": 60 }
+        ]
+      },
+      {
+        "name": "Sacred Power",
+        "statKey": "sacred_power",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 10 },
+          { "level": 2, "cost": 2, "value": 20 },
+          { "level": 3, "cost": 5, "value": 30 },
+          { "level": 4, "cost": 12, "value": 40 },
+          { "level": 5, "cost": 25, "value": 50 },
+          { "level": 6, "cost": 30, "value": 60 }
+        ]
+      },
+      {
+        "name": "EXP Obtained (%)",
+        "statKey": "exp_pct",
+        "levels": [
+          { "level": 1, "cost": 1, "value": 2.5 },
+          { "level": 2, "cost": 2, "value": 5 },
+          { "level": 3, "cost": 5, "value": 7.5 },
+          { "level": 4, "cost": 12, "value": 10 },
+          { "level": 5, "cost": 25, "value": 12.5 },
+          { "level": 6, "cost": 30, "value": 15 }
         ]
       }
     ]
