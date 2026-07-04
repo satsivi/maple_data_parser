@@ -615,6 +615,7 @@ window.onEventSelect = function () {
         <th>Stat key</th>
         <th class="r">FD weight</th>
         <th class="r">Reserved levels</th>
+        <th class="r">Complete by wk</th>
       </tr>
     </thead><tbody>`;
 
@@ -638,6 +639,9 @@ window.onEventSelect = function () {
       </td>
       <td class="qty-cell">
         <input class="row-qty" id="lineReserved_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0">
+      </td>
+      <td class="qty-cell">
+        <input class="row-qty" id="lineDeadline_${i}" type="number" min="1" step="1" placeholder="—">
       </td>
     </tr>`;
   });
@@ -712,15 +716,30 @@ window.runOptimize = function () {
 
   const lines = EVENT_CONFIGS[eventName].lines;
 
-  // Read the current (possibly hand-edited) weight/reserved values straight off the table.
+  // Read the current (possibly hand-edited) weight/reserved/deadline values straight off the table.
   const weights = {};
   const reservedLevels = {};
-  lines.forEach((line, i) => {
+  const deadlines = {};
+  for (const [i, line] of lines.entries()) {
     const weightVal   = parseFloat(document.getElementById(`lineWeight_${i}`).value);
     const reservedVal = parseInt(document.getElementById(`lineReserved_${i}`).value, 10);
+    const deadlineRaw = document.getElementById(`lineDeadline_${i}`).value.trim();
     weights[line.name] = isNaN(weightVal) ? 0 : weightVal;
     reservedLevels[line.name] = isNaN(reservedVal) ? 0 : reservedVal;
-  });
+
+    if (deadlineRaw !== "") {
+      const deadlineVal = parseInt(deadlineRaw, 10);
+      if (isNaN(deadlineVal) || deadlineVal < 1) {
+        showEventError(`"${line.name}" has an invalid "Complete by wk" value.`);
+        return;
+      }
+      if (!reservedLevels[line.name]) {
+        showEventError(`"${line.name}" has a "Complete by wk" value but no reserved levels — set reserved levels first.`);
+        return;
+      }
+      deadlines[line.name] = deadlineVal;
+    }
+  }
 
   const incomeByWeek = computeWeeklyIncome({
     pointsPerClaim, maxClaimsPerWeek, maxLifetimeClaims, numWeeks,
@@ -728,7 +747,7 @@ window.runOptimize = function () {
   });
 
   try {
-    const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels });
+    const result = optimizeEvent(lines, weights, { incomeByWeek, reservedLevels, deadlines });
     renderEventResult(result);
     renderStatSummary(lines, weights, result.chosenLevels);
   } catch (err) {

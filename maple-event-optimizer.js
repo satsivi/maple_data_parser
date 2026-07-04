@@ -181,42 +181,65 @@ export function optimizeAllocation(lines, weights, totalBudget, reservedLevels =
 
 /**
  * Turn a chosen allocation into a concrete week-by-week purchase order.
- * Selected steps are sorted by FD-per-cost ratio (best value first); each
- * week adds that week's income to a running balance and greedily buys any
- * affordable selected step, respecting that a line's levels must be bought
- * in order.
+ * Selected steps are normally sorted by FD-per-cost ratio (best value
+ * first); each week adds that week's income to a running balance and
+ * greedily buys any affordable selected step, respecting that a line's
+ * levels must be bought in order.
+ *
+ * A reserved step belonging to a line with a `deadlines` entry is treated
+ * as urgent: urgent steps are always bought before any non-urgent step,
+ * ordered by nearest deadline first (then ratio as a tiebreak), so the
+ * schedule secures them as early as affordable instead of only guaranteeing
+ * they're bought by the end of the event. Reserved steps on a line with no
+ * deadline aren't treated specially — they're already guaranteed to be
+ * bought (the DP requires it), only their timing is unconstrained.
  *
  * @param {Array<{ name: string }>} lines
  * @param {Record<string, number>} chosenLevels - line name -> levels bought
  * @param {Record<string, Array<{level:number, cost:number, statGain:number}>>} lineSteps
  * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
- * @param {{ incomeByWeek: number[] }} budget
+ * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number>, deadlines?: Record<string, number> }} budget
  * @returns {{ weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>, totalFdGained: number }}
+ * @throws {Error} if a line's deadline can't be met given the income schedule
  */
 export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, budget) {
-  const { incomeByWeek } = budget;
+  const { incomeByWeek, reservedLevels = {}, deadlines = {} } = budget;
 
   // Flatten selected steps, keeping per-line order via a pointer per line.
   const remainingByLine = {};
   for (const line of lines) {
     const count = chosenLevels[line.name] || 0;
+    const reservedCount = Math.min(reservedLevels[line.name] ?? 0, count);
+    const deadline = deadlines[line.name] ?? null;
     const fdPerUnit = weights[line.name] ?? 0;
     remainingByLine[line.name] = lineSteps[line.name]
       .slice(0, count)
-      .map((step) => ({
+      .map((step, idx) => ({
         line: line.name,
         level: step.level,
         cost: step.cost,
         fdGain: step.statGain * fdPerUnit,
         ratio: step.cost > 0 ? (step.statGain * fdPerUnit) / step.cost : Infinity,
+        urgent: idx < reservedCount && deadline !== null,
+        deadline,
       }));
   }
 
+  // True if `a` should be bought before `b`: urgent steps always win, sorted
+  // by nearest deadline; otherwise fall back to best FD-per-cost ratio.
+  function isBetter(a, b) {
+    if (a.urgent !== b.urgent) return a.urgent;
+    if (a.urgent && b.urgent && a.deadline !== b.deadline) return a.deadline < b.deadline;
+    return a.ratio > b.ratio;
+  }
+
   // Priority queue substitute: at each purchase decision, look at the head
-  // (next unbought level) of every line, and buy the best-ratio affordable one.
+  // (next unbought level) of every line, and buy the highest-priority
+  // affordable one per isBetter().
   let balance = 0;
   const weeks = [];
   let totalFdGained = 0;
+  const lastUrgentWeek = {}; // line name -> week its last urgent (deadline) step was bought
 
   for (let i = 0; i < incomeByWeek.length; i++) {
     const week = i + 1;
@@ -233,7 +256,7 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
         if (!queue.length) continue;
         const head = queue[0];
         if (head.cost > balance) continue;
-        if (!bestStep || head.ratio > bestStep.ratio) {
+        if (!bestStep || isBetter(head, bestStep)) {
           bestLine = line.name;
           bestStep = head;
         }
@@ -242,6 +265,7 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
       remainingByLine[bestLine].shift();
       balance -= bestStep.cost;
       totalFdGained += bestStep.fdGain;
+      if (bestStep.urgent) lastUrgentWeek[bestLine] = week;
       purchases.push({
         line: bestStep.line,
         level: bestStep.level,
@@ -251,6 +275,18 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
     }
 
     weeks.push({ week, purchases, balance });
+  }
+
+  // Verify every deadline was actually met — a line could still have unbought
+  // urgent steps left over if income never allowed affording them in time.
+  for (const [lineName, deadline] of Object.entries(deadlines)) {
+    const stillQueued = remainingByLine[lineName]?.some((s) => s.urgent);
+    const boughtLate = lastUrgentWeek[lineName] > deadline;
+    if (stillQueued || boughtLate) {
+      throw new Error(
+        `Cannot complete "${lineName}"'s reserved levels by week ${deadline} with the given income schedule.`
+      );
+    }
   }
 
   return { weeks, totalFdGained };
@@ -313,19 +349,21 @@ export function computeWeeklyIncome({
  *
  * @param {Array<{ name: string, levels: Array<{level:number, cost:number, value:number}> }>} lines
  * @param {Record<string, number>} weights - FD weight per unit, keyed by line name
- * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number> }} budget
+ * @param {{ incomeByWeek: number[], reservedLevels?: Record<string, number>, deadlines?: Record<string, number> }} budget
  * @returns {{
  *   weeks: Array<{ week: number, purchases: Array<{line:string, level:number, cost:number, fdGain:number}>, balance: number }>,
  *   totalFdGained: number,
  *   chosenLevels: Record<string, number>,
  * }}
+ * @throws {Error} if reserved levels cost more than the total budget, or a
+ *   line's deadline can't be met given the income schedule
  */
 export function optimizeEvent(lines, weights, budget) {
-  const { incomeByWeek, reservedLevels = {} } = budget;
+  const { incomeByWeek, reservedLevels = {}, deadlines = {} } = budget;
   const totalBudget = incomeByWeek.reduce((sum, income) => sum + income, 0);
 
   const { chosenLevels, lineSteps } = optimizeAllocation(lines, weights, totalBudget, reservedLevels);
-  const schedule = buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, { incomeByWeek });
+  const schedule = buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, { incomeByWeek, reservedLevels, deadlines });
 
   return { ...schedule, chosenLevels };
 }
