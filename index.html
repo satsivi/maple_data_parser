@@ -440,7 +440,7 @@ Boss Damage	40	3.725%
 
 <script type="module">
 import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES } from "./maple-constants/index.js";
-import { parse } from "./maple-parser.js";
+import { parse, splitColumns } from "./maple-parser.js";
 import { optimizeEvent, computeWeeklyIncome, estimateCurrentWeek, computeMarginalSteps } from "./maple-event-optimizer.js";
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
@@ -655,9 +655,9 @@ function buildRows(rawText, className) {
     !l.startsWith("항목") && !l.toLowerCase().startsWith("stat")
   );
   return data.map(line => {
-    const parts  = line.split("\t");
-    if (parts.length < 3) return null; // malformed row — fewer than 3 tab-separated columns
-    const label  = parts[0].trim();
+    const parts  = splitColumns(line);
+    if (parts.length < 3) return null; // malformed row — fewer than 3 columns
+    const label  = parts[0];
     const value  = parseFloat(parts[1]);
     const col3   = parseFloat(parts[2].replace("%", ""));
     return { label, perUnit: col3 / value };

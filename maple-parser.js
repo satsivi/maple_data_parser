@@ -31,7 +31,7 @@ const COLUMN_SEP = /\t|[  ]{4,}/g;
  * @param {string} line
  * @returns {string[]}
  */
-function splitColumns(line) {
+export function splitColumns(line) {
   return line.replace(COLUMN_SEP, "|").split("|").map((part) => part.trim());
 }
 
