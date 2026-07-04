@@ -349,8 +349,8 @@ Boss Damage	40	3.725%
     <div class="help-popover" id="helpPopover">
       <div class="help-title">How this works</div>
       <ol>
-        <li>Load FD data first: on the Stat Parser tab, click the copy button under <strong>FD</strong> in Scouter's Stat Efficiency section, paste it in, and parse.</li>
-        <li>Scouter's export doesn't include <strong>Buff Duration</strong> or <strong>Crit Rate</strong>. Grab those FD values yourself and type them into the matching line's FD weight field.</li>
+        <li>Load % FD data first: on the Stat Parser tab, click the copy button under <strong>FD</strong> in Scouter's Stat Efficiency section, paste it in, and parse.</li>
+        <li>Scouter's export doesn't include <strong>Buff Duration</strong> or <strong>Crit Rate</strong>. Grab those % FD values yourself and type them into the matching line's % FD weight field.</li>
         <li>To force a skill to a specific level, set <strong>Reserved Levels</strong> for that line. Add a <strong>Complete by wk</strong> deadline if it needs to hit that level by a certain week.</li>
         <li>Already partway through the event? Fill in <strong>Current level</strong> for whatever you've already bought. The tool estimates what week you're on from those points and optimizes only what's left.</li>
       </ol>
@@ -361,7 +361,7 @@ Boss Damage	40	3.725%
     </div>
   </div>
 
-  <span class="status-chip" id="fdStatusChip">FD data: not loaded</span>
+  <span class="status-chip" id="fdStatusChip">% FD data: not loaded</span>
 
   <div class="divider"></div>
 
@@ -403,20 +403,20 @@ Boss Damage	40	3.725%
 </div>
 
 <div class="hint-banner" id="fdHintBanner">
-  <span>⚠ Load a Final Damage% stat table on the Stat Parser tab first. Event lines seed their FD weights from it.</span>
+  <span>⚠ Load a Final Damage% stat table on the Stat Parser tab first. Event lines seed their % FD weights from it.</span>
   <button class="btn-ghost" onclick="showTab('parser')">Go to Stat Parser →</button>
 </div>
 
 <div class="body">
   <div class="left-col" style="grid-template-rows: auto minmax(0, 1fr)">
     <div class="panel">
-      <div class="panel-label">Event Lines — FD weight &amp; reserved levels</div>
+      <div class="panel-label">Event Lines — % FD weight &amp; reserved levels</div>
       <div class="table-scroll" id="linesTableWrap">
         <div class="empty-state">Select an event to configure its lines.</div>
       </div>
     </div>
     <div class="panel">
-      <div class="panel-label">Result Summary — final level &amp; FD per stat</div>
+      <div class="panel-label">Result Summary — final level &amp; % FD per stat</div>
       <div class="table-scroll" id="statSummaryWrap">
         <div class="empty-state">Run Optimize to see the final allocation per stat.</div>
       </div>
@@ -464,10 +464,10 @@ function updateFdStatusChip() {
 
   if (chip) {
     if (ready) {
-      chip.textContent = `FD data loaded: ${displayName(lastParsedClassName)}`;
+      chip.textContent = `% FD data loaded: ${displayName(lastParsedClassName)}`;
       chip.classList.add("ready");
     } else {
-      chip.textContent = "FD data: not loaded";
+      chip.textContent = "% FD data: not loaded";
       chip.classList.remove("ready");
     }
   }
@@ -685,7 +685,7 @@ function renderTable() {
     return;
   }
 
-  const colHead = parsedEquivType === "final_damage" ? "FD % equiv" : "Main Stat equiv";
+  const colHead = parsedEquivType === "final_damage" ? "% FD equiv" : "Main Stat equiv";
 
   let html = `<table>
     <thead>
@@ -799,7 +799,7 @@ window.onEventSelect = function () {
       <tr>
         <th>Line</th>
         <th>Stat key</th>
-        <th class="r">FD weight</th>
+        <th class="r">% FD weight</th>
         <th class="r">Current level</th>
         <th class="r">Reserved levels</th>
         <th class="r">Complete by wk</th>
@@ -940,7 +940,7 @@ window.runOptimize = function () {
   if (parsedEquivType !== "final_damage") {
     showEventError(
       'The last parsed table used Main Stat equivalence, not Final Damage%. ' +
-      'The Event Optimizer only works with FD weights — parse a table with "Final Damage%" as the 3rd column first.'
+      'The Event Optimizer only works with % FD weights — parse a table with "Final Damage%" as the 3rd column first.'
     );
     return;
   }
@@ -1074,7 +1074,7 @@ function renderStatSummary(lines, weights, chosenLevels) {
       <tr>
         <th>Stat</th>
         <th class="r">Level</th>
-        <th class="r">FD</th>
+        <th class="r">% FD</th>
       </tr>
     </thead><tbody>`;
 
@@ -1096,7 +1096,7 @@ function renderEventResult(result, { guessedWeek = 0, spentSoFar = 0 } = {}) {
   const weekNote = guessedWeek > 0
     ? `Estimated current week: <strong>${guessedWeek + 1}</strong> (from ${spentSoFar} pts already spent on current levels). `
     : "";
-  summary.innerHTML = `${weekNote}Total gain by end of event: <strong>${result.totalFdGained.toFixed(4)}</strong>`;
+  summary.innerHTML = `${weekNote}Total gain by end of event: <strong>${result.totalFdGained.toFixed(4)}% FD</strong>`;
 
   const wrap = document.getElementById("eventScheduleWrap");
   const rowsWithPurchases = result.weeks.filter((w) => w.purchases.length > 0);
@@ -1113,8 +1113,8 @@ function renderEventResult(result, { guessedWeek = 0, spentSoFar = 0 } = {}) {
         <th>Line</th>
         <th class="r">Level</th>
         <th class="r">Cost</th>
-        <th class="r">Gain</th>
-        <th class="r">Balance</th>
+        <th class="r">% FD Gain</th>
+        <th class="r">Remaining Points</th>
       </tr>
     </thead><tbody>`;
 
