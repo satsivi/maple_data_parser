@@ -365,6 +365,13 @@ Boss Damage	40	3.725%
 
   <div class="divider"></div>
 
+  <div class="input-cluster">
+    <button class="btn-ghost" onclick="loadReasonableDefault()">Reasonable Default</button>
+    <button class="help-btn" type="button" title="111k Phantom configuration" aria-label="About Reasonable Default">?</button>
+  </div>
+
+  <div class="divider"></div>
+
   <span class="input-label">Event</span>
   <select class="num-input" id="eventSelect" style="width:200px" onchange="onEventSelect()"></select>
 
@@ -641,6 +648,47 @@ window.runParse = function () {
     saveParserState(cls, raw, result);
   } catch (err) {
     showError(err.message);
+  }
+};
+
+// ── reasonable default: a known-good sample table (111k Phantom) ────────────
+const REASONABLE_DEFAULT_CLASS = "phantom";
+const REASONABLE_DEFAULT_RAW = `항목\tValue\tFinal Damage%
+Boss Damage\t40\t3.357%
+Attack\t30\t0.695%
+Attack%\t12\t5.302%
+Critical Dmg\t8\t2.467%
+Ignore Dff(300)\t40\t0.932%
+Ignore Dff(380)\t40\t1.188%
+LUK\t30\t0.239%
+LUK%\t12\t1.023%
+Not Affected by % LUK\t200\t0.209%
+DEX\t30\t0.021%
+DEX%\t12\t0.137%
+Not Affected by % DEX\t200\t0.052%
+All Stat%\t9\t0.870%`;
+
+window.loadReasonableDefault = function () {
+  document.getElementById("classInput").value = displayName(REASONABLE_DEFAULT_CLASS);
+  document.getElementById("inputArea").value = REASONABLE_DEFAULT_RAW;
+  updateBadge();
+  clearError();
+  clearEventError();
+
+  try {
+    const result = parse(REASONABLE_DEFAULT_RAW, REASONABLE_DEFAULT_CLASS);
+    document.getElementById("outputArea").value = JSON.stringify(result, null, 2);
+
+    parsedRows           = buildRows(REASONABLE_DEFAULT_RAW, REASONABLE_DEFAULT_CLASS);
+    parsedEquivType      = result.equivalence_type;
+    lastParsedWeights    = result.weights;
+    lastParsedClassName  = REASONABLE_DEFAULT_CLASS;
+    renderTable();
+    reseedLinesTable();
+    updateFdStatusChip();
+    saveParserState(REASONABLE_DEFAULT_CLASS, REASONABLE_DEFAULT_RAW, result);
+  } catch (err) {
+    showEventError(err.message);
   }
 };
 
