@@ -389,16 +389,16 @@ Boss Damage	40	3.725%
   <div class="input-cluster">
     <span class="cluster-label">Income</span>
     <span class="input-label">Points/claim</span>
-    <input class="num-input" id="pointsPerClaimInput" type="number" min="0" step="any" value="5" style="width:64px">
+    <input class="num-input" id="pointsPerClaimInput" type="number" min="0" step="any" value="5" style="width:64px" oninput="saveEventState()">
 
     <span class="input-label">Max claims/week</span>
-    <input class="num-input" id="maxClaimsPerWeekInput" type="number" min="0" step="any" value="5" style="width:64px">
+    <input class="num-input" id="maxClaimsPerWeekInput" type="number" min="0" step="any" value="5" style="width:64px" oninput="saveEventState()">
 
     <span class="input-label">Lifetime cap</span>
-    <input class="num-input" id="maxLifetimeClaimsInput" type="number" min="0" step="any" value="60">
+    <input class="num-input" id="maxLifetimeClaimsInput" type="number" min="0" step="any" value="60" oninput="saveEventState()">
 
     <span class="input-label">Total paid pts</span>
-    <input class="num-input" id="totalPaidPointsInput" type="number" min="0" step="any" value="0">
+    <input class="num-input" id="totalPaidPointsInput" type="number" min="0" step="any" value="0" oninput="saveEventState()">
   </div>
 
   <div class="divider"></div>
@@ -406,12 +406,13 @@ Boss Damage	40	3.725%
   <div class="input-cluster">
     <span class="cluster-label">Session</span>
     <span class="input-label">Weeks</span>
-    <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="12" style="width:64px">
+    <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="12" style="width:64px" oninput="saveEventState()">
   </div>
 
   <div class="divider"></div>
 
   <button class="btn-primary" onclick="runOptimize()">Optimize →</button>
+  <button class="btn-ghost" onclick="resetEventSettings()">Reset</button>
 
   <span class="error-inline" id="eventErrorBar"></span>
 
@@ -806,11 +807,79 @@ function clearEventError() {
   document.getElementById("eventErrorBar").classList.remove("visible");
 }
 
+// ── persistence: remember event optimizer inputs across reloads ─────────────
+// Per-line values (current/reserved/deadline) are keyed by event name since
+// each event has a different set of lines; the shared income/session inputs
+// and the last-selected event are stored at the top level.
+const EVENT_STORAGE_KEY = "mapleEventState";
+
+function loadEventState() {
+  try {
+    const raw = localStorage.getItem(EVENT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearEventState() {
+  try { localStorage.removeItem(EVENT_STORAGE_KEY); } catch {}
+}
+
+window.saveEventState = function () {
+  try {
+    const eventName = document.getElementById("eventSelect")?.value || "";
+    const state = {
+      eventName,
+      pointsPerClaim:    document.getElementById("pointsPerClaimInput")?.value,
+      maxClaimsPerWeek:  document.getElementById("maxClaimsPerWeekInput")?.value,
+      maxLifetimeClaims: document.getElementById("maxLifetimeClaimsInput")?.value,
+      totalPaidPoints:   document.getElementById("totalPaidPointsInput")?.value,
+      numWeeks:          document.getElementById("numWeeksInput")?.value,
+      linesByEvent: loadEventState()?.linesByEvent ?? {},
+    };
+
+    if (eventName && EVENT_CONFIGS[eventName]) {
+      const lineState = {};
+      EVENT_CONFIGS[eventName].lines.forEach((line, i) => {
+        lineState[line.name] = {
+          current:  document.getElementById(`lineCurrent_${i}`)?.value ?? "0",
+          reserved: document.getElementById(`lineReserved_${i}`)?.value ?? "0",
+          deadline: document.getElementById(`lineDeadline_${i}`)?.value ?? "",
+        };
+      });
+      state.linesByEvent[eventName] = lineState;
+    }
+
+    localStorage.setItem(EVENT_STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+};
+
+function restoreTopLevelEventInputs(saved) {
+  if (!saved) return;
+  if (saved.pointsPerClaim    != null) document.getElementById("pointsPerClaimInput").value    = saved.pointsPerClaim;
+  if (saved.maxClaimsPerWeek  != null) document.getElementById("maxClaimsPerWeekInput").value  = saved.maxClaimsPerWeek;
+  if (saved.maxLifetimeClaims != null) document.getElementById("maxLifetimeClaimsInput").value = saved.maxLifetimeClaims;
+  if (saved.totalPaidPoints   != null) document.getElementById("totalPaidPointsInput").value   = saved.totalPaidPoints;
+  if (saved.numWeeks          != null) document.getElementById("numWeeksInput").value          = saved.numWeeks;
+}
+
+window.resetEventSettings = function () {
+  clearEventState();
+  document.getElementById("pointsPerClaimInput").value    = 5;
+  document.getElementById("maxClaimsPerWeekInput").value  = 5;
+  document.getElementById("maxLifetimeClaimsInput").value = 60;
+  document.getElementById("totalPaidPointsInput").value   = 0;
+  document.getElementById("numWeeksInput").value          = 12;
+  clearEventError();
+  onEventSelect(); // rebuilds the lines table with default current/reserved/deadline
+};
+
 function populateEventSelect() {
   const select = document.getElementById("eventSelect");
   select.innerHTML = EVENT_NAMES.map((n) =>
     `<option value="${n}">${displayName(n)}</option>`
   ).join("");
+  const saved = loadEventState();
+  if (saved?.eventName && EVENT_NAMES.includes(saved.eventName)) select.value = saved.eventName;
+  restoreTopLevelEventInputs(saved);
   onEventSelect();
 }
 
@@ -891,13 +960,32 @@ window.onEventSelect = function () {
         <input class="row-qty" id="lineReserved_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0" oninput="onLineReservedChange(${i})">
       </td>
       <td class="qty-cell">
-        <input class="row-qty" id="lineDeadline_${i}" type="number" min="1" step="1" placeholder="—" disabled>
+        <input class="row-qty" id="lineDeadline_${i}" type="number" min="1" step="1" placeholder="—" disabled oninput="saveEventState()">
       </td>
     </tr>`;
   });
 
   html += `</tbody></table>`;
   wrap.innerHTML = html;
+
+  // Restore any previously-saved current/reserved/deadline values for this
+  // event's lines, then persist (records the newly-selected event name even
+  // if there was nothing saved for it yet).
+  const savedLines = loadEventState()?.linesByEvent?.[eventName];
+  if (savedLines) {
+    lines.forEach((line, i) => {
+      const ls = savedLines[line.name];
+      if (!ls) return;
+      const currentInput = document.getElementById(`lineCurrent_${i}`);
+      const reservedInput = document.getElementById(`lineReserved_${i}`);
+      if (currentInput && ls.current != null) currentInput.value = ls.current;
+      if (reservedInput && ls.reserved != null) reservedInput.value = ls.reserved;
+      onLineReservedChange(i); // syncs the deadline input's disabled state
+      const deadlineInput = document.getElementById(`lineDeadline_${i}`);
+      if (deadlineInput && ls.deadline) deadlineInput.value = ls.deadline;
+    });
+  }
+  saveEventState();
 };
 
 /**
@@ -944,6 +1032,8 @@ window.onLineReservedChange = function (i) {
   const hasReserved = !isNaN(reserved) && reserved > 0;
   deadlineInput.disabled = !hasReserved;
   if (!hasReserved) deadlineInput.value = "";
+
+  saveEventState();
 };
 
 /**
@@ -1083,15 +1173,21 @@ window.runOptimize = function () {
     return;
   }
 
-  const remainingIncomeByWeek = incomeByWeek.slice(guessedWeek);
-  if (remainingIncomeByWeek.length > 0) remainingIncomeByWeek[0] += leftover;
+  // The leftover from `guessedWeek` is spendable immediately — give it its
+  // own budget "week" (labeled as guessedWeek itself) instead of folding it
+  // into the following week's income, so anything affordable right now gets
+  // bought right now rather than waiting an extra week.
+  const offset = guessedWeek > 0 ? guessedWeek - 1 : 0;
+  const remainingIncomeByWeek = guessedWeek > 0
+    ? [leftover, ...incomeByWeek.slice(guessedWeek)]
+    : incomeByWeek.slice(guessedWeek);
 
   const shiftedDeadlines = {};
   for (const [name, week] of Object.entries(deadlines)) {
-    const shifted = week - guessedWeek;
+    const shifted = week - offset;
     if (shifted < 1) {
       showEventError(
-        `"${name}"'s "Complete by wk ${week}" deadline has already passed — you're estimated to be in week ${guessedWeek + 1} already, based on points already spent.`
+        `"${name}"'s "Complete by wk ${week}" deadline has already passed — you're estimated to be in week ${guessedWeek} already, based on points already spent.`
       );
       return;
     }
@@ -1102,7 +1198,7 @@ window.runOptimize = function () {
     const result = optimizeEvent(lines, weights, {
       incomeByWeek: remainingIncomeByWeek, reservedLevels, deadlines: shiftedDeadlines, ownedLevels,
     });
-    result.weeks = result.weeks.map((w) => ({ ...w, week: w.week + guessedWeek }));
+    result.weeks = result.weeks.map((w) => ({ ...w, week: w.week + offset }));
     renderEventResult(result, { guessedWeek, spentSoFar });
     renderStatSummary(lines, weights, result.chosenLevels);
   } catch (err) {
@@ -1154,14 +1250,14 @@ function renderEventResult(result, { guessedWeek = 0, spentSoFar = 0 } = {}) {
   const summary = document.getElementById("eventSummary");
   summary.classList.add("visible");
   const weekNote = guessedWeek > 0
-    ? `Estimated current week: <strong>${guessedWeek + 1}</strong> (from ${spentSoFar} pts already spent on current levels). `
+    ? `Estimated current week: <strong>${guessedWeek}</strong> (from ${spentSoFar} pts already spent on current levels). `
     : "";
   summary.innerHTML = `${weekNote}Total gain by end of event: <strong>${result.totalFdGained.toFixed(4)}% FD</strong>`;
 
   const wrap = document.getElementById("eventScheduleWrap");
   const rowsWithPurchases = result.weeks.filter((w) => w.purchases.length > 0);
 
-  if (!rowsWithPurchases.length) {
+  if (!rowsWithPurchases.length && guessedWeek === 0) {
     wrap.innerHTML = '<div class="empty-state">No purchases were affordable within this budget.</div>';
     return;
   }
@@ -1179,7 +1275,16 @@ function renderEventResult(result, { guessedWeek = 0, spentSoFar = 0 } = {}) {
     </thead><tbody>`;
 
   for (const week of result.weeks) {
-    if (!week.purchases.length) continue;
+    if (!week.purchases.length) {
+      if (week.week === guessedWeek) {
+        html += `<tr>
+          <td class="week-label">${week.week}</td>
+          <td colspan="4" class="stat-name">Nothing affordable this week</td>
+          <td class="equiv-val">${week.balance.toFixed(2)}</td>
+        </tr>`;
+      }
+      continue;
+    }
     week.purchases.forEach((p, i) => {
       html += `<tr>
         <td class="week-label">${i === 0 ? week.week : ""}</td>
