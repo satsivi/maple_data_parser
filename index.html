@@ -251,6 +251,17 @@
   }
   .tab-btn:hover { opacity: 1; color: var(--text); background: var(--surface); }
   .tab-btn.active { color: var(--accent); background: var(--accent-dim); border-left-color: var(--accent); }
+  .sidebar-divider { height: 1px; background: var(--border); margin: 14px 8px 0; }
+  .sidebar-section-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted); padding: 10px 10px 6px; white-space: nowrap;
+  }
+  .sidebar-link {
+    color: var(--text-muted); font-family: var(--sans); font-size: 13px; font-weight: 500;
+    padding: 9px 10px; border-radius: 6px; text-decoration: none; display: block;
+    border-left: 2px solid transparent;
+  }
+  .sidebar-link:hover { opacity: 1; color: var(--text); background: var(--surface); }
   .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
@@ -285,6 +296,11 @@
   <div class="sidebar-title"><span>🍁</span><span class="brand-name">Mimi's Tools</span></div>
   <button class="tab-btn active" id="tabBtnParser" onclick="showTab('parser')">Stat Parser</button>
   <button class="tab-btn" id="tabBtnEvent" onclick="showTab('event')">Event Optimizer</button>
+
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-section-label">Other Resources</div>
+  <a class="sidebar-link" href="https://satsivi.github.io/apq-guide/#stage2" target="_blank" rel="noopener">APQ Guide</a>
+  <a class="sidebar-link" href="https://satsivi.github.io/maplescouter-hexa-order/" target="_blank" rel="noopener">Scouter HEXA Order</a>
 </div>
 
 <div class="main-content">
