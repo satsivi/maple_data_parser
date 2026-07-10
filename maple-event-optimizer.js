@@ -264,7 +264,13 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
     balance += incomeByWeek[i];
 
     const purchases = [];
-    // Keep buying while something affordable remains.
+    // Keep buying while the best remaining purchase (by ratio/urgency,
+    // regardless of affordability) can be afforded. Deliberately does NOT
+    // fall back to a lesser-ranked-but-affordable step when the top choice
+    // is too expensive: since that top choice already has the best ratio
+    // among every pending step, any combination of cheaper affordable steps
+    // spent at the same total cost can only match or lose to it, so saving
+    // toward it is never worse than spending on the runner-up.
     // eslint-disable-next-line no-constant-condition
     while (true) {
       let bestLine = null;
@@ -273,13 +279,12 @@ export function buildWeeklySchedule(lines, chosenLevels, lineSteps, weights, bud
         const queue = remainingByLine[line.name];
         if (!queue.length) continue;
         const head = queue[0];
-        if (head.cost > balance) continue;
         if (!bestStep || isBetter(head, bestStep)) {
           bestLine = line.name;
           bestStep = head;
         }
       }
-      if (!bestStep) break;
+      if (!bestStep || bestStep.cost > balance) break;
       remainingByLine[bestLine].shift();
       balance -= bestStep.cost;
       totalFdGained += bestStep.fdGain;
