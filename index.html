@@ -277,6 +277,21 @@
     overflow: hidden; padding-right: 6px;
   }
   .input-label { font-size: 10px; color: var(--text-muted); margin-right: 4px; white-space: nowrap; }
+  .ts-preview { font-size: 11px; font-family: var(--sans); color: var(--text-muted); white-space: nowrap; }
+  .ts-toolbar {
+    flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-start;
+    gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border);
+  }
+  .ts-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .reminder-hint {
+    flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid var(--border);
+    font-size: 12px; line-height: 1.6; color: var(--text-muted); font-family: var(--sans);
+  }
+  .reminder-hint code {
+    font-family: var(--mono); font-size: 11px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 4px;
+  }
   .event-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
   .event-summary {
     font-size: 13px; color: var(--text); margin-bottom: 14px;
@@ -296,6 +311,7 @@
   <div class="sidebar-title"><span>🍁</span><span class="brand-name">Mimi's Tools</span></div>
   <button class="tab-btn active" id="tabBtnParser" onclick="showTab('parser')">Stat Parser</button>
   <button class="tab-btn" id="tabBtnEvent" onclick="showTab('event')">Event Optimizer</button>
+  <button class="tab-btn" id="tabBtnReminders" onclick="showTab('reminders')">Reminders</button>
 
   <div class="sidebar-divider"></div>
   <div class="sidebar-section-label">Other Resources</div>
@@ -483,6 +499,71 @@ Boss Damage	40	3.725%
   </div>
 </div>
 </div>
+
+<div class="view" id="remindersView" style="display:none">
+<div class="toolbar">
+  <span class="toolbar-title">📅 Discord Reminder Builder</span>
+
+  <span class="input-label">Template</span>
+  <select class="num-input" id="reminderTemplateSelect" style="width:180px" onchange="loadReminderTemplate()"></select>
+  <button class="btn-ghost" onclick="promptSaveReminderTemplate()">Save As…</button>
+  <button class="btn-ghost" onclick="promptSaveReminderTemplateOverwrite()">Save</button>
+  <button class="btn-ghost" onclick="promptRenameReminderTemplate()">Rename</button>
+  <button class="btn-ghost" onclick="promptDeleteReminderTemplate()">Delete</button>
+</div>
+
+<div class="reminder-hint">
+  Write your post below, then use the presets to drop a Discord timestamp in at your cursor — pick a style first (e.g. <code>Relative (R)</code> for "in 3 hours"), then click a preset or use the custom picker.
+  To ping a role, type <code>&lt;@&amp;ROLE_ID&gt;</code> right where you want the mention. Get a role's ID in Discord by enabling <em>Settings → Advanced → Developer Mode</em>, then right-click the role and choose <em>Copy Role ID</em>.
+</div>
+
+<div class="ts-toolbar">
+  <div class="ts-row">
+    <span class="input-label">Insert timestamp as</span>
+    <select class="num-input" id="reminderStyleSelect" style="width:170px">
+      <option value="t">Short Time (t)</option>
+      <option value="T">Long Time (T)</option>
+      <option value="d">Short Date (d)</option>
+      <option value="D">Long Date (D)</option>
+      <option value="f">Short Date/Time (f)</option>
+      <option value="F" selected>Long Date/Time (F)</option>
+      <option value="R">Relative (R)</option>
+    </select>
+  </div>
+
+  <div class="ts-row">
+    <button class="btn-ghost" onclick="insertNextWeekdayReset('tuesday')">Tuesday reset</button>
+    <span class="ts-preview" id="tsPreviewTue"></span>
+  </div>
+
+  <div class="ts-row">
+    <button class="btn-ghost" onclick="insertNextWeekdayReset('wednesday')">Wednesday reset</button>
+    <span class="ts-preview" id="tsPreviewWed"></span>
+  </div>
+
+  <div class="ts-row">
+    <button class="btn-ghost" onclick="insertNowTimestamp()">Insert now</button>
+    <span class="ts-preview" id="tsPreviewNow"></span>
+  </div>
+
+  <div class="ts-row">
+    <input class="num-input" id="reminderCustomDatetime" type="datetime-local" style="width:190px" oninput="updateCustomTsPreview()">
+    <span class="ts-preview" id="tsPreviewCustom"></span>
+    <button class="btn-ghost" onclick="insertCustomTimestamp()">Insert</button>
+  </div>
+</div>
+
+<div class="body" style="grid-template-columns: 1fr">
+  <div class="left-col" style="border-right:none">
+    <div class="panel">
+      <div class="panel-label">Post body</div>
+      <textarea id="reminderBody" placeholder="Write or load a template, then insert timestamps at your cursor…" oninput="saveReminderState()"></textarea>
+      <div class="ts-row" style="margin-top:10px">
+        <button class="btn-copy" id="reminderCopyBtn" onclick="copyReminderOutput()">Copy</button>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 
 <script type="module">
@@ -492,15 +573,98 @@ import { optimizeEvent, computeWeeklyIncome, estimateCurrentWeek, computeMargina
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
 window.showTab = function (tab) {
-  const isParser = tab === "parser";
-  document.getElementById("parserView").style.display = isParser ? "" : "none";
-  document.getElementById("eventView").style.display   = isParser ? "none" : "";
-  document.getElementById("tabBtnParser").classList.toggle("active", isParser);
-  document.getElementById("tabBtnEvent").classList.toggle("active", !isParser);
-  if (!isParser) {
+  document.getElementById("parserView").style.display    = tab === "parser"    ? "" : "none";
+  document.getElementById("eventView").style.display      = tab === "event"     ? "" : "none";
+  document.getElementById("remindersView").style.display  = tab === "reminders" ? "" : "none";
+  document.getElementById("tabBtnParser").classList.toggle("active", tab === "parser");
+  document.getElementById("tabBtnEvent").classList.toggle("active", tab === "event");
+  document.getElementById("tabBtnReminders").classList.toggle("active", tab === "reminders");
+  if (tab === "event") {
     reseedLinesTable();
     maybeAutoOpenHelp();
   }
+  if (tab === "reminders") {
+    refreshTimestampPreviews();
+  }
+};
+
+// ── reminders: Discord timestamp helpers ──────────────────────────────────────
+/** Epoch seconds for the next occurrence of UTC weekday `targetDow` (0=Sun..6=Sat) at 00:00:00 UTC.
+ *  Always strictly in the future relative to "now" — rolls to the following week if today's
+ *  candidate has already passed. */
+function nextWeekdayUtcMidnightEpoch(targetDow) {
+  const now = new Date();
+  const todayUtcMidnightMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const currentDow = new Date(todayUtcMidnightMs).getUTCDay();
+  const daysAhead = (targetDow - currentDow + 7) % 7;
+  const candidateMs = todayUtcMidnightMs + daysAhead * 86400000;
+  const finalMs = candidateMs <= now.getTime() ? candidateMs + 7 * 86400000 : candidateMs;
+  return Math.floor(finalMs / 1000);
+}
+
+function discordTag(epochSeconds, style) {
+  return `<t:${epochSeconds}:${style}>`;
+}
+
+function formatUtcPreview(epochSeconds) {
+  const d = new Date(epochSeconds * 1000);
+  return d.toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZone: "UTC",
+  }) + " UTC";
+}
+
+function insertAtCursor(text) {
+  const ta = document.getElementById("reminderBody");
+  if (!ta) return;
+  const start = ta.selectionStart ?? ta.value.length;
+  const end = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+  const newPos = start + text.length;
+  ta.focus();
+  ta.setSelectionRange(newPos, newPos);
+  window.saveReminderState();
+}
+
+function currentReminderStyle() {
+  return document.getElementById("reminderStyleSelect")?.value || "F";
+}
+
+// "Tuesday reset" targets the reset that follows Tuesday (next Wed 00:00 UTC);
+// "Wednesday reset" targets the reset that follows Wednesday (next Thu 00:00 UTC).
+window.insertNextWeekdayReset = function (label) {
+  const targetDow = label === "tuesday" ? 3 /* Wed */ : 4 /* Thu */;
+  insertAtCursor(discordTag(nextWeekdayUtcMidnightEpoch(targetDow), currentReminderStyle()));
+};
+
+window.insertNowTimestamp = function () {
+  insertAtCursor(discordTag(Math.floor(Date.now() / 1000), currentReminderStyle()));
+};
+
+window.insertCustomTimestamp = function () {
+  const input = document.getElementById("reminderCustomDatetime");
+  if (!input?.value) return;
+  const epoch = Math.floor(new Date(input.value).getTime() / 1000);
+  if (Number.isNaN(epoch)) return;
+  insertAtCursor(discordTag(epoch, currentReminderStyle()));
+};
+
+function refreshTimestampPreviews() {
+  const tuEl = document.getElementById("tsPreviewTue");
+  const weEl = document.getElementById("tsPreviewWed");
+  const nowEl = document.getElementById("tsPreviewNow");
+  if (tuEl) tuEl.textContent = formatUtcPreview(nextWeekdayUtcMidnightEpoch(3));
+  if (weEl) weEl.textContent = formatUtcPreview(nextWeekdayUtcMidnightEpoch(4));
+  if (nowEl) nowEl.textContent = formatUtcPreview(Math.floor(Date.now() / 1000));
+}
+
+window.updateCustomTsPreview = function () {
+  const input = document.getElementById("reminderCustomDatetime");
+  const previewEl = document.getElementById("tsPreviewCustom");
+  if (!input || !previewEl) return;
+  if (!input.value) { previewEl.textContent = ""; return; }
+  const epoch = Math.floor(new Date(input.value).getTime() / 1000);
+  previewEl.textContent = Number.isNaN(epoch) ? "Invalid date" : formatUtcPreview(epoch);
 };
 
 // ── FD data status chip (Event Optimizer tab) ─────────────────────────────────
@@ -826,6 +990,43 @@ window.copyOutput = function () {
     setTimeout(() => { btn.textContent = "Copy JSON"; btn.classList.remove("copied"); }, 1800);
   });
 };
+
+window.copyReminderOutput = function () {
+  const out = document.getElementById("reminderBody").value;
+  if (!out) return;
+  navigator.clipboard.writeText(out).then(() => {
+    const btn = document.getElementById("reminderCopyBtn");
+    btn.textContent = "Copied ✓";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1800);
+  });
+};
+
+// ── reminders: persistence (draft body + last-used template name) ───────────
+const REMINDER_STORAGE_KEY = "mapleReminderState";
+
+function loadReminderState() {
+  try {
+    const raw = localStorage.getItem(REMINDER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+window.saveReminderState = function () {
+  try {
+    localStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify({
+      body: document.getElementById("reminderBody")?.value || "",
+      lastTemplateName: document.getElementById("reminderTemplateSelect")?.value || "",
+    }));
+  } catch {}
+};
+
+function applyReminderState() {
+  const state = loadReminderState();
+  const ta = document.getElementById("reminderBody");
+  if (ta) ta.value = state?.body || "";
+  populateReminderTemplateSelects(state?.lastTemplateName || "");
+}
 
 // ── event optimizer ──────────────────────────────────────────────────────────
 function showEventError(msg) {
@@ -1459,9 +1660,89 @@ window.promptDeletePreset = function (sourceSelectId) {
   populatePresetSelects();
 };
 
+// ── reminders: named template list (mirrors named-preset system) ────────────
+const REMINDER_TEMPLATES_KEY = "mapleReminderTemplates";
+
+function loadReminderTemplates() {
+  try {
+    const raw = localStorage.getItem(REMINDER_TEMPLATES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function saveReminderTemplates(templates) {
+  try { localStorage.setItem(REMINDER_TEMPLATES_KEY, JSON.stringify(templates)); } catch {}
+}
+
+function populateReminderTemplateSelects(selectedName = "") {
+  const names = Object.keys(loadReminderTemplates()).sort((a, b) => a.localeCompare(b));
+  const select = document.getElementById("reminderTemplateSelect");
+  if (!select) return;
+  select.innerHTML = `<option value="">— Load template —</option>` +
+    names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  select.value = names.includes(selectedName) ? selectedName : "";
+}
+
+window.promptSaveReminderTemplate = function () {
+  const name = prompt("Save current post body as template:")?.trim();
+  if (!name) return;
+  const templates = loadReminderTemplates();
+  if (templates[name] && !confirm(`Overwrite existing template "${name}"?`)) return;
+  templates[name] = { name, body: document.getElementById("reminderBody").value };
+  saveReminderTemplates(templates);
+  populateReminderTemplateSelects(name);
+  window.saveReminderState();
+};
+
+window.promptSaveReminderTemplateOverwrite = function () {
+  const select = document.getElementById("reminderTemplateSelect");
+  const name = select?.value;
+  if (!name) { window.promptSaveReminderTemplate(); return; }
+  const templates = loadReminderTemplates();
+  templates[name] = { name, body: document.getElementById("reminderBody").value };
+  saveReminderTemplates(templates);
+  window.saveReminderState();
+};
+
+window.loadReminderTemplate = function () {
+  const select = document.getElementById("reminderTemplateSelect");
+  const name = select?.value;
+  const templates = loadReminderTemplates();
+  const template = name ? templates[name] : null;
+  document.getElementById("reminderBody").value = template ? template.body : "";
+  window.saveReminderState();
+};
+
+window.promptRenameReminderTemplate = function () {
+  const select = document.getElementById("reminderTemplateSelect");
+  const oldName = select?.value;
+  if (!oldName) return;
+  const newName = prompt("Rename template to:", oldName)?.trim();
+  if (!newName || newName === oldName) return;
+  const templates = loadReminderTemplates();
+  if (templates[newName] && !confirm(`Overwrite existing template "${newName}"?`)) return;
+  templates[newName] = { ...templates[oldName], name: newName };
+  delete templates[oldName];
+  saveReminderTemplates(templates);
+  populateReminderTemplateSelects(newName);
+  window.saveReminderState();
+};
+
+window.promptDeleteReminderTemplate = function () {
+  const select = document.getElementById("reminderTemplateSelect");
+  const name = select?.value;
+  if (!name) return;
+  if (!confirm(`Delete template "${name}"?`)) return;
+  const templates = loadReminderTemplates();
+  delete templates[name];
+  saveReminderTemplates(templates);
+  populateReminderTemplateSelects();
+};
+
 populateEventSelect();
 updateFdStatusChip();
 populatePresetSelects();
+applyReminderState();
+refreshTimestampPreviews();
 
 const helpDismissCheckbox = document.getElementById("helpDontShowAgain");
 if (helpDismissCheckbox) helpDismissCheckbox.checked = isHelpDismissed();
