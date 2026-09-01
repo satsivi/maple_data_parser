@@ -283,15 +283,34 @@
     gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border);
   }
   .ts-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dc-message {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; font-family: var(--sans); font-size: 14px; line-height: 1.5;
+    color: var(--text); word-wrap: break-word; white-space: normal;
+  }
+  .dc-message .empty-hint { color: var(--text-muted); font-style: italic; }
+  .dc-message code {
+    font-family: var(--mono); font-size: 0.9em; background: var(--surface2);
+    padding: 1px 4px; border-radius: 4px;
+  }
+  .dc-mention-chip {
+    background: var(--accent-dim); color: var(--accent); border-radius: 4px;
+    padding: 0 3px; font-weight: 500;
+  }
+  .dc-time-chip {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 0 4px; font-size: 0.95em;
+  }
   .reminder-hint {
     flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid var(--border);
     font-size: 12px; line-height: 1.6; color: var(--text-muted); font-family: var(--sans);
   }
-  .reminder-hint code {
+  .reminder-hint code, .reminder-hint kbd {
     font-family: var(--mono); font-size: 11px; color: var(--text);
     background: var(--surface); border: 1px solid var(--border);
     padding: 1px 5px; border-radius: 4px;
   }
+  .reminder-hint > div + div { margin-top: 6px; }
   .event-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
   .event-summary {
     font-size: 13px; color: var(--text); margin-bottom: 14px;
@@ -513,8 +532,13 @@ Boss Damage	40	3.725%
 </div>
 
 <div class="reminder-hint">
-  Write your post below, then use the presets to drop a Discord timestamp in at your cursor — pick a style first (e.g. <code>Relative (R)</code> for "in 3 hours"), then click a preset or use the custom picker.
-  To ping a role, type <code>&lt;@&amp;ROLE_ID&gt;</code> right where you want the mention. Get a role's ID in Discord by enabling <em>Settings → Advanced → Developer Mode</em>, then right-click the role and choose <em>Copy Role ID</em>.
+  <div>Write your post below, then use the presets to drop a Discord timestamp in at your cursor — pick a style first (e.g. <code>Relative (R)</code> for "in 3 hours"), then click a preset or use the custom picker.</div>
+  <div>
+    <strong>Parse shorthand:</strong> type <code>reset</code> anywhere in the body followed by an offset or keyword, then click <strong>Parse</strong> (next to Copy) to fill in every match at once —
+    <code>reset +1</code> (that many resets from now, days by default), <code>reset -10 minutes</code> / <code>reset +2 hours</code> (offset with a unit), or <code>reset today</code> / <code>reset tomorrow</code>.
+    Parsed by mistake? Press <kbd>Ctrl+Z</kbd> (<kbd>Cmd+Z</kbd> on Mac) right after clicking Parse to undo it.
+  </div>
+  <div>To ping a role, type <code>&lt;@&amp;ROLE_ID&gt;</code> right where you want the mention. Get a role's ID in Discord by enabling <em>Settings → Advanced → Developer Mode</em>, then right-click the role and choose <em>Copy Role ID</em>.</div>
 </div>
 
 <div class="ts-toolbar">
@@ -553,14 +577,23 @@ Boss Damage	40	3.725%
   </div>
 </div>
 
-<div class="body" style="grid-template-columns: 1fr">
-  <div class="left-col" style="border-right:none">
+<div class="body">
+  <div class="left-col" style="grid-template-rows: 1fr">
     <div class="panel">
       <div class="panel-label">Post body</div>
       <textarea id="reminderBody" placeholder="Write or load a template, then insert timestamps at your cursor…" oninput="saveReminderState()"></textarea>
       <div class="ts-row" style="margin-top:10px">
+        <button class="btn-ghost" onclick="parseReminderTimestamps()">Parse</button>
         <button class="btn-copy" id="reminderCopyBtn" onclick="copyReminderOutput()">Copy</button>
       </div>
+    </div>
+  </div>
+  <div class="right-col">
+    <div class="col-header">
+      <div class="panel-label">Preview</div>
+    </div>
+    <div class="table-scroll" style="padding:14px">
+      <div class="dc-message" id="reminderPreview"></div>
     </div>
   </div>
 </div>
@@ -571,8 +604,19 @@ import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES } from
 import { parse, splitColumns } from "./maple-parser.js";
 import { optimizeEvent, computeWeeklyIncome, estimateCurrentWeek, computeMarginalSteps } from "./maple-event-optimizer.js";
 
-// ── tabs ─────────────────────────────────────────────────────────────────────
-window.showTab = function (tab) {
+// ── tabs + URL routing ─────────────────────────────────────────────────────
+// Each tab gets its own URL via the hash (e.g. #reminders). The hash never
+// leaves the browser, so there's no server-side path for GitHub Pages (or any
+// static host) to 404 on — a refresh or direct link always just loads
+// index.html normally, and this script picks the right tab from the hash.
+const TAB_SLUGS = { parser: "parser", event: "event-optimizer", reminders: "reminders" };
+
+function tabFromLocation() {
+  const hash = window.location.hash.replace(/^#\/?/, "");
+  return Object.keys(TAB_SLUGS).find((tab) => TAB_SLUGS[tab] === hash) || "parser";
+}
+
+function applyTab(tab) {
   document.getElementById("parserView").style.display    = tab === "parser"    ? "" : "none";
   document.getElementById("eventView").style.display      = tab === "event"     ? "" : "none";
   document.getElementById("remindersView").style.display  = tab === "reminders" ? "" : "none";
@@ -585,8 +629,17 @@ window.showTab = function (tab) {
   }
   if (tab === "reminders") {
     refreshTimestampPreviews();
+    updateReminderPreview();
   }
+}
+
+window.showTab = function (tab) {
+  applyTab(tab);
+  const newHash = "#" + TAB_SLUGS[tab];
+  if (window.location.hash !== newHash) window.location.hash = newHash;
 };
+
+window.addEventListener("hashchange", () => applyTab(tabFromLocation()));
 
 // ── reminders: Discord timestamp helpers ──────────────────────────────────────
 /** Epoch seconds for the next occurrence of UTC weekday `targetDow` (0=Sun..6=Sat) at 00:00:00 UTC.
@@ -614,6 +667,64 @@ function formatUtcPreview(epochSeconds) {
   }) + " UTC";
 }
 
+// ── reminders: post preview (approximates Discord's own rendering) ─────────
+function formatDiscordStyleForPreview(epochSeconds, style) {
+  if (style === "R") return formatRelativeForPreview(epochSeconds);
+  const d = new Date(epochSeconds * 1000);
+  const optsByStyle = {
+    t: { hour: "numeric", minute: "2-digit" },
+    T: { hour: "numeric", minute: "2-digit", second: "2-digit" },
+    d: { month: "2-digit", day: "2-digit", year: "numeric" },
+    D: { month: "long", day: "numeric", year: "numeric" },
+    f: { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" },
+    F: { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" },
+  };
+  // Local time, matching how Discord actually renders these tags for each viewer.
+  return d.toLocaleString(undefined, optsByStyle[style] || optsByStyle.F);
+}
+
+function formatRelativeForPreview(epochSeconds) {
+  const diffSec = epochSeconds - Math.floor(Date.now() / 1000);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60], ["second", 1]];
+  for (const [unit, secs] of units) {
+    if (Math.abs(diffSec) >= secs || unit === "second") return rtf.format(Math.round(diffSec / secs), unit);
+  }
+}
+
+// <t:epoch:style> tags become localized time chips; <@&roleId> mentions become a
+// highlighted "@role" chip (Discord resolves the real name from the ID — we can't,
+// so this is a placeholder); a small subset of markdown is rendered for readability.
+const PREVIEW_TOKEN_RE = /<t:(\d+):([a-zA-Z])>|<@&(\d+)>/g;
+
+function buildReminderPreviewHtml(text) {
+  const tokens = [];
+  const withPlaceholders = text.replace(PREVIEW_TOKEN_RE, (match, epoch, style) => {
+    const html = epoch !== undefined
+      ? `<span class="dc-time-chip">${escapeHtml(formatDiscordStyleForPreview(parseInt(epoch, 10), style))}</span>`
+      : `<span class="dc-mention-chip">@role</span>`;
+    tokens.push(html);
+    return ` ${tokens.length - 1} `;
+  });
+
+  let html = escapeHtml(withPlaceholders);
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  html = html.replace(/\n/g, "<br>");
+  html = html.replace(/ (\d+) /g, (_, idx) => tokens[Number(idx)]);
+  return html;
+}
+
+function updateReminderPreview() {
+  const el = document.getElementById("reminderPreview");
+  if (!el) return;
+  const text = document.getElementById("reminderBody")?.value || "";
+  el.innerHTML = text.trim()
+    ? buildReminderPreviewHtml(text)
+    : '<span class="empty-hint">Nothing to preview yet…</span>';
+}
+
 function insertAtCursor(text) {
   const ta = document.getElementById("reminderBody");
   if (!ta) return;
@@ -629,6 +740,72 @@ function insertAtCursor(text) {
 function currentReminderStyle() {
   return document.getElementById("reminderStyleSelect")?.value || "F";
 }
+
+/** Epoch seconds for the next daily reset boundary (next 00:00 UTC strictly after "now"). */
+function nextDailyResetEpoch() {
+  const now = new Date();
+  const todayUtcMidnightMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const finalMs = todayUtcMidnightMs <= now.getTime() ? todayUtcMidnightMs + 86400000 : todayUtcMidnightMs;
+  return Math.floor(finalMs / 1000);
+}
+
+// Matches reset shorthand (any spacing/case), anchored on the word "reset" but requiring
+// one of two trailing shapes so bare "reset" (e.g. "the shop reset is coming") never fires:
+//   1. a signed offset, optionally with a unit — "reset +1", "reset -10 minutes", "reset+2 hours"
+//      (no unit defaults to days, so "reset +1" still means "one reset from now")
+//   2. the word "today" or "tomorrow" — "reset today", "reset tomorrow"
+const RESET_KEYWORD_RE =
+  /\breset\b(?:\s*([+-])\s*(\d+)\s*(minutes?|mins?|hours?|hrs?|days?)?|\s+(today|tomorrow)\b)/gi;
+const ALREADY_TAGGED_RE = /^\s*\(<t:\d+:[a-zA-Z]>\)/;
+
+function unitToSeconds(unit) {
+  if (!unit) return 86400; // no unit specified -> days, matching the original "reset +1" = 1 day shorthand
+  const u = unit[0].toLowerCase();
+  if (u === "m") return 60;
+  if (u === "h") return 3600;
+  return 86400;
+}
+
+// Snapshot of the body text right before the most recent Parse, so Ctrl+Z can undo just
+// that action. Programmatic `.value` writes (like Parse itself) don't touch the textarea's
+// native undo stack, so this is a manual single-level undo scoped to Parse specifically —
+// it's cleared as soon as the user types anything, so a later Ctrl+Z falls through to the
+// browser's normal undo instead of jumping back to a stale snapshot.
+let reminderParseUndoSnapshot = null;
+
+/** Scans the post body for reset shorthand ("reset +1", "reset -10 minutes", "reset today", …)
+ *  and appends the matching Discord timestamp after each one, e.g. "reset +1" ->
+ *  "reset +1 (<t:...:F>)". Safe to re-run — occurrences that already have a tag right after
+ *  them are left alone. */
+window.parseReminderTimestamps = function () {
+  const ta = document.getElementById("reminderBody");
+  const style = currentReminderStyle();
+  const text = ta.value;
+  const baseEpoch = nextDailyResetEpoch();
+
+  let result = "";
+  let lastIndex = 0;
+  RESET_KEYWORD_RE.lastIndex = 0;
+  let match;
+  while ((match = RESET_KEYWORD_RE.exec(text)) !== null) {
+    const [, sign, digits, unit, keyword] = match;
+    const matchEnd = match.index + match[0].length;
+    result += text.slice(lastIndex, matchEnd);
+    lastIndex = matchEnd;
+
+    if (ALREADY_TAGGED_RE.test(text.slice(matchEnd))) continue;
+
+    const offsetSeconds = keyword
+      ? (keyword.toLowerCase() === "tomorrow" ? 86400 : 0)
+      : (sign === "-" ? -1 : 1) * parseInt(digits, 10) * unitToSeconds(unit);
+    result += ` (${discordTag(baseEpoch + offsetSeconds, style)})`;
+  }
+  result += text.slice(lastIndex);
+
+  if (result !== text) reminderParseUndoSnapshot = text;
+  ta.value = result;
+  window.saveReminderState();
+};
 
 // "Tuesday reset" targets the reset that follows Tuesday (next Wed 00:00 UTC);
 // "Wednesday reset" targets the reset that follows Wednesday (next Thu 00:00 UTC).
@@ -1019,6 +1196,7 @@ window.saveReminderState = function () {
       lastTemplateName: document.getElementById("reminderTemplateSelect")?.value || "",
     }));
   } catch {}
+  updateReminderPreview();
 };
 
 function applyReminderState() {
@@ -1026,6 +1204,7 @@ function applyReminderState() {
   const ta = document.getElementById("reminderBody");
   if (ta) ta.value = state?.body || "";
   populateReminderTemplateSelects(state?.lastTemplateName || "");
+  updateReminderPreview();
 }
 
 // ── event optimizer ──────────────────────────────────────────────────────────
@@ -1744,11 +1923,29 @@ populatePresetSelects();
 applyReminderState();
 refreshTimestampPreviews();
 
+const reminderBodyEl = document.getElementById("reminderBody");
+if (reminderBodyEl) {
+  reminderBodyEl.addEventListener("keydown", (e) => {
+    const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z";
+    if (!isUndo || reminderParseUndoSnapshot === null) return;
+    e.preventDefault();
+    reminderBodyEl.value = reminderParseUndoSnapshot;
+    reminderParseUndoSnapshot = null;
+    window.saveReminderState();
+  });
+  // Any real typing (not our own programmatic writes) retires the Parse undo snapshot,
+  // so a later Ctrl+Z falls through to the browser's normal undo instead of jumping back.
+  reminderBodyEl.addEventListener("input", () => { reminderParseUndoSnapshot = null; });
+}
+
 const helpDismissCheckbox = document.getElementById("helpDontShowAgain");
 if (helpDismissCheckbox) helpDismissCheckbox.checked = isHelpDismissed();
 
 // Populate autocomplete on load
 window.onClassInput();
+
+// Show whichever tab the current URL points to (defaults to the parser).
+applyTab(tabFromLocation());
 </script>
 </body>
 </html>
