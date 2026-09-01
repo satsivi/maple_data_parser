@@ -326,6 +326,13 @@
   <button class="btn-primary" onclick="runParse()">Parse →</button>
   <button class="btn-ghost"   onclick="clearAll()">Clear</button>
 
+  <div class="divider"></div>
+
+  <span class="input-label">Preset</span>
+  <select class="num-input" id="presetSelectParser" style="width:160px" onchange="loadPreset('presetSelectParser')"></select>
+  <button class="btn-ghost" onclick="promptSavePreset()">Save Preset</button>
+  <button class="btn-ghost" onclick="promptDeletePreset('presetSelectParser')">Delete</button>
+
   <span class="error-inline" id="errorBar"></span>
 
   <div class="spacer"></div>
@@ -424,6 +431,13 @@ Boss Damage	40	3.725%
     <span class="input-label">Weeks</span>
     <input class="num-input" id="numWeeksInput" type="number" min="1" step="1" value="12" style="width:64px" oninput="saveEventState()">
   </div>
+
+  <div class="divider"></div>
+
+  <span class="input-label">Preset</span>
+  <select class="num-input" id="presetSelectEvent" style="width:160px" onchange="loadPreset('presetSelectEvent')"></select>
+  <button class="btn-ghost" onclick="promptSavePreset()">Save Preset</button>
+  <button class="btn-ghost" onclick="promptDeletePreset('presetSelectEvent')">Delete</button>
 
   <div class="divider"></div>
 
@@ -856,6 +870,8 @@ window.saveEventState = function () {
       const lineState = {};
       EVENT_CONFIGS[eventName].lines.forEach((line, i) => {
         lineState[line.name] = {
+          weight:   document.getElementById(`lineWeight_${i}`)?.value ?? "",
+          statKey:  line.statKeyOptions ? document.getElementById(`lineStatKey_${i}`)?.value ?? "" : "",
           current:  document.getElementById(`lineCurrent_${i}`)?.value ?? "0",
           reserved: document.getElementById(`lineReserved_${i}`)?.value ?? "0",
           deadline: document.getElementById(`lineDeadline_${i}`)?.value ?? "",
@@ -967,7 +983,7 @@ window.onEventSelect = function () {
       <td class="stat-name">${line.name}</td>
       <td class="stat-name">${statKeyCell}</td>
       <td class="qty-cell">
-        <input class="row-qty no-spinner" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}">
+        <input class="row-qty no-spinner" id="lineWeight_${i}" type="number" step="any" value="${seedWeight}" oninput="saveEventState()">
       </td>
       <td class="qty-cell">
         <input class="row-qty" id="lineCurrent_${i}" type="number" min="0" max="${line.levels.length}" step="1" value="0" oninput="onLineCurrentChange(${i})">
@@ -992,8 +1008,12 @@ window.onEventSelect = function () {
     lines.forEach((line, i) => {
       const ls = savedLines[line.name];
       if (!ls) return;
+      const statKeyInput = document.getElementById(`lineStatKey_${i}`);
+      const weightInput = document.getElementById(`lineWeight_${i}`);
       const currentInput = document.getElementById(`lineCurrent_${i}`);
       const reservedInput = document.getElementById(`lineReserved_${i}`);
+      if (statKeyInput && ls.statKey) statKeyInput.value = ls.statKey;
+      if (weightInput && ls.weight !== "" && ls.weight != null) weightInput.value = ls.weight;
       if (currentInput && ls.current != null) currentInput.value = ls.current;
       if (reservedInput && ls.reserved != null) reservedInput.value = ls.reserved;
       onLineReservedChange(i); // syncs the deadline input's disabled state
@@ -1015,6 +1035,7 @@ window.onLineStatKeyChange = function (i) {
   const seedWeight = seedForLine(line, keys);
   document.getElementById(`lineWeight_${i}`).value = seedWeight;
   lineSeedWeights[line.name] = seedWeight;
+  saveEventState();
 };
 
 /**
@@ -1317,27 +1338,130 @@ function renderEventResult(result, { guessedWeek = 0, spentSoFar = 0 } = {}) {
   wrap.innerHTML = html;
 }
 
+// ── apply a saved parser state (from storage or a loaded preset) ───────────
+// Shared by the page-load restore and by loading a named preset, so both
+// paths render the parsed table/output and update dependent state the same way.
+function applyParserState(saved, { persist = false } = {}) {
+  if (saved?.cls && CLASS_STATS[saved.cls] && saved?.raw && saved?.result) {
+    document.getElementById("classInput").value = displayName(saved.cls);
+    document.getElementById("inputArea").value  = saved.raw;
+    document.getElementById("outputArea").value = JSON.stringify(saved.result, null, 2);
+    parsedRows           = buildRows(saved.raw, saved.cls);
+    parsedEquivType       = saved.result.equivalence_type;
+    lastParsedWeights    = saved.result.weights;
+    lastParsedClassName  = saved.cls;
+    renderTable();
+    if (persist) saveParserState(saved.cls, saved.raw, saved.result);
+    return true;
+  }
+
+  // No usable parser data — clear the panel rather than leave stale rows.
+  document.getElementById("classInput").value = "";
+  document.getElementById("inputArea").value  = "";
+  document.getElementById("outputArea").value = "";
+  parsedRows           = [];
+  parsedEquivType       = "final_damage";
+  lastParsedWeights    = null;
+  lastParsedClassName  = null;
+  renderTable();
+  if (persist) clearParserState();
+  return false;
+}
+
 // ── restore last successful parse on load ──────────────────────────────────
 try {
   const savedParserState = loadParserState();
-  if (savedParserState?.cls && CLASS_STATS[savedParserState.cls] && savedParserState?.raw && savedParserState?.result) {
-    document.getElementById("classInput").value = displayName(savedParserState.cls);
-    document.getElementById("inputArea").value  = savedParserState.raw;
-    document.getElementById("outputArea").value = JSON.stringify(savedParserState.result, null, 2);
-    parsedRows           = buildRows(savedParserState.raw, savedParserState.cls);
-    parsedEquivType      = savedParserState.result.equivalence_type;
-    lastParsedWeights    = savedParserState.result.weights;
-    lastParsedClassName  = savedParserState.cls;
-    renderTable();
-  } else if (savedParserState) {
-    clearParserState(); // stale/invalid — e.g. class no longer exists
+  if (savedParserState) {
+    if (!applyParserState(savedParserState)) clearParserState(); // stale/invalid — e.g. class no longer exists
   }
 } catch {
   clearParserState();
 }
 
+// ── named presets: bundle parser + event optimizer state under one name ────
+const PRESETS_STORAGE_KEY = "maplePresets";
+
+function loadPresets() {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function savePresets(presets) {
+  try { localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets)); } catch {}
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function populatePresetSelects(selectedName = "") {
+  const names = Object.keys(loadPresets()).sort((a, b) => a.localeCompare(b));
+  const optionsHtml = `<option value="">— Load preset —</option>` +
+    names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  for (const id of ["presetSelectParser", "presetSelectEvent"]) {
+    const select = document.getElementById(id);
+    if (!select) continue;
+    select.innerHTML = optionsHtml;
+    select.value = names.includes(selectedName) ? selectedName : "";
+  }
+}
+
+/** Saves the current parser + event optimizer state (both tabs) under a user-given name. */
+window.promptSavePreset = function () {
+  const name = prompt("Save current Stat Parser + Event Optimizer state as:")?.trim();
+  if (!name) return;
+
+  const presets = loadPresets();
+  if (presets[name] && !confirm(`Overwrite existing preset "${name}"?`)) return;
+
+  saveEventState(); // flush any in-progress edits to storage before snapshotting
+  presets[name] = {
+    parser: loadParserState(),
+    event: loadEventState(),
+  };
+  savePresets(presets);
+  populatePresetSelects(name);
+};
+
+/** Loads a preset selected from either tab's dropdown, updating both tabs' state. */
+window.loadPreset = function (sourceSelectId) {
+  const name = document.getElementById(sourceSelectId)?.value;
+  if (!name) return;
+  const preset = loadPresets()[name];
+  if (!preset) return;
+
+  applyParserState(preset.parser, { persist: true });
+
+  if (preset.event) {
+    localStorage.setItem(EVENT_STORAGE_KEY, JSON.stringify(preset.event));
+  } else {
+    clearEventState();
+  }
+  populateEventSelect(); // re-reads storage: restores event, income/session inputs, and per-line values
+  updateFdStatusChip();
+  clearError();
+  clearEventError();
+
+  populatePresetSelects(name);
+};
+
+/** Deletes the preset currently selected in the given dropdown. */
+window.promptDeletePreset = function (sourceSelectId) {
+  const select = document.getElementById(sourceSelectId);
+  const name = select?.value;
+  if (!name) return;
+  if (!confirm(`Delete preset "${name}"?`)) return;
+
+  const presets = loadPresets();
+  delete presets[name];
+  savePresets(presets);
+  populatePresetSelects();
+};
+
 populateEventSelect();
 updateFdStatusChip();
+populatePresetSelects();
 
 const helpDismissCheckbox = document.getElementById("helpDontShowAgain");
 if (helpDismissCheckbox) helpDismissCheckbox.checked = isHelpDismissed();
