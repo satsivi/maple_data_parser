@@ -235,7 +235,10 @@ export function familyDisplayName(family) {
  * ("prime line") rate.
  *
  * Each target in a set is a SUM, not a single-line minimum — see the SUM
- * targeting note at the top of this file. Brute-forces every real (slot1,
+ * targeting note at the top of this file. Two rows in the same set for the
+ * same family are additive (13 + 13 + 10 Attack% in one set means a combined
+ * 36 Attack%, not the same target checked three times), collapsed before
+ * anything else runs. Brute-forces every real (slot1,
  * slot2, slot3) line combination, summing each combination's contribution
  * to every family any target cares about (an All Stat roll contributes to
  * STR/DEX/INT/LUK sums too), and checks whether the combination reaches
@@ -252,11 +255,21 @@ export function familyDisplayName(family) {
  */
 export function computeOptionSetsHitPlan({ cube, categoryData, grade, optionSets, itemLevel, manualCost }) {
   if (!cube.slotGradeMatch) throw new Error(`${cube.label} doesn't have real option-line data.`);
-  const sets = (optionSets || []).filter((s) => s && s.length > 0);
-  if (sets.length === 0) throw new Error("Add at least one target line.");
-  for (const s of sets) {
+  const rawSets = (optionSets || []).filter((s) => s && s.length > 0);
+  if (rawSets.length === 0) throw new Error("Add at least one target line.");
+  for (const s of rawSets) {
     if (s.length > 3) throw new Error("An item only has 3 potential slots — pick at most 3 lines per option set.");
   }
+
+  // Two rows in the same set targeting the same family are additive, not
+  // redundant — "Attack % >= 13" + "Attack % >= 13" + "Attack % >= 10" in one
+  // set means the user wants 36 Attack% total (however split across slots),
+  // not the same family checked three times against three thresholds.
+  const sets = rawSets.map((set) => {
+    const totals = new Map();
+    for (const { family, minValue } of set) totals.set(family, (totals.get(family) || 0) + minValue);
+    return Array.from(totals, ([family, minValue]) => ({ family, minValue }));
+  });
 
   const families = Array.from(new Set(sets.flatMap((set) => set.map((t) => t.family))));
   const familyIndex = new Map(families.map((f, i) => [f, i]));
