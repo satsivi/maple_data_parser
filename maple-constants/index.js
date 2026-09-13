@@ -15,6 +15,8 @@ import classStats from "./class-stats.json" with { type: "json" };
 import statTypes from "./stat-types.json" with { type: "json" };
 import eventConfigs from "./event-configs.json" with { type: "json" };
 import versions from "./versions.json" with { type: "json" };
+import potentialCubes from "./potential-cubes.json" with { type: "json" };
+import potentialLines from "./potential-lines.json" with { type: "json" };
 
 /**
  * Maps every class name (snake_case) to its stat type key.
@@ -102,3 +104,102 @@ export const EVENT_NAMES = Object.keys(EVENT_CONFIGS).sort();
  * @type {Array<{ version: string, alias: string }>}
  */
 export const VERSIONS = versions;
+
+/**
+ * Cost model and per-slot grade-match rate for the two covered cubes
+ * (Glowing Cube = RED, Bright Cube = POTENTIAL). The raw data lives in
+ * ./potential-cubes.json; this file just loads and re-exports it. See
+ * maple-potential-calc.js for how it's consumed.
+ *
+ * slotGradeMatch is sourced from Nexon's official per-item probability
+ * disclosure pages (maplestory.nexon.com/Guide/OtherProbability/cube/*).
+ * Both cubes are cash-shop/drop items with no fixed meso price, so
+ * defaultManualCost is just a starting point — the UI's Cost per cube field
+ * and Cube Sale toggle (25% off) are what actually drive the calculation.
+ *
+ * @type {Record<string, { label: string, costModel: string, defaultManualCost?: number, slotGradeMatch: { slot1: number, slot2: number, slot3: number } }>}
+ */
+export const POTENTIAL_CUBES = potentialCubes;
+
+/**
+ * Both covered potential cube keys, in display order (matching the order
+ * they appear in ./potential-cubes.json).
+ *
+ * @type {string[]}
+ */
+export const POTENTIAL_CUBE_KEYS = Object.keys(POTENTIAL_CUBES);
+
+/**
+ * Real per-line potential data — a hybrid of live KMS Nexon data (pool
+ * membership and per-line probability) and StrategyWiki's GMS-specific value
+ * tables (for lines that scale continuously with item level), verified to
+ * reproduce mesu.live's own numbers exactly. Separate per cube, since
+ * Glowing Cube (RED) and Bright Cube (POTENTIAL) draw from different live
+ * KMS pools/rates. See CLAUDE.md's Potential Calculator section for the full
+ * provenance, why the split exists, and the build-script notes.
+ *
+ * Shape: POTENTIAL_LINES[cubeKey][equipCategory].grades[grade].{prime,nonPrime} = Array<Line>
+ * where `grade` is RARE/EPIC/UNIQUE/LEGENDARY and each slot's actual roll is
+ * "prime" (matches the target grade) with probability POTENTIAL_CUBES[cubeKey]
+ * .slotGradeMatch[slotN], else "non-prime" (rolls as if one grade lower).
+ * RARE's own non-prime pool can't be queried from KMS (grades only go 1-4,
+ * so there's no "one below Rare" to ask for) and falls back to StrategyWiki's
+ * "Rare (Non-prime)" tier verbatim (`source: "wiki-fallback"`).
+ *
+ * Line shape:
+ *   {
+ *     name: string,               // the stat's own display name
+ *     family: string,             // groups same-shape lines for "at least this good" targeting
+ *     valueRows: Array<{min:number, max:number|null, gms:boolean, value:number}> | null,
+ *                                 // per-item-level value brackets (max:null = no upper bound;
+ *                                 // gms:true rows are GMS-specific overrides that take priority
+ *                                 // over the general row for the same item level) — present only
+ *                                 // when source is "wiki-value"; null otherwise (see fixedValue)
+ *     fixedValue: number | null,  // constant value for lines without a level-scaled table —
+ *                                 // KMS's own scraped value for "kms"-sourced lines, or the
+ *                                 // wiki's as-is value for "wiki-fallback" (Rare non-prime) lines
+ *     cashPct: number,            // % chance this line is chosen, conditional on the slot
+ *                                 // already being at this grade/prime-state — from live KMS data
+ *                                 // for "kms"/"wiki-value" lines, or the wiki's own rate for the
+ *                                 // "wiki-fallback" Rare non-prime tier
+ *     minLevel: number,           // item level below which this line isn't in the pool at all —
+ *                                 // from the wiki for "wiki-value" lines, else a flat 100 default
+ *                                 // (KMS's search tool doesn't expose per-line level gating)
+ *     maxAppearances: number|null // wiki-noted cap on how many slots can show this line — not
+ *                                 // currently enforced by computeOptionSetsHitPlan
+ *     source: "kms"|"wiki-value"|"wiki-fallback", // which of the two sources this line came from
+ *   }
+ *
+ * @type {Record<string, Record<string, { grades: Record<string, { prime: Array<object>, nonPrime: Array<object> }> }>>}
+ */
+export const POTENTIAL_LINES = potentialLines;
+
+/**
+ * Equipment categories with real GMS potential data, mapped to a readable
+ * English label. Several groups share identical data on the wiki (e.g. Top
+ * and Overall) but are still listed separately here for a natural UI.
+ *
+ * @type {Record<string, string>}
+ */
+export const POTENTIAL_EQUIP_CATEGORIES = {
+  WEAPON: "Weapon",
+  EMBLEM: "Emblem",
+  SECONDARY_WEAPON: "Secondary Weapon (excl. Demon Aegis/Soul Ring)",
+  SHIELD_SOULRING: "Demon Aegis / Soul Ring",
+  HAT: "Hat",
+  TOP: "Top",
+  OVERALL: "Overall",
+  BOTTOM: "Bottom",
+  SHOES: "Shoes",
+  GLOVES: "Gloves",
+  CAPE: "Cape",
+  BELT: "Belt",
+  SHOULDER: "Shoulder Accessory",
+  FACE: "Face Accessory",
+  EYE: "Eye Accessory",
+  EARRING: "Earrings",
+  RING: "Ring",
+  PENDANT: "Pendant",
+  HEART: "Mechanical Heart",
+  BADGE: "Badge",
+};

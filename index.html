@@ -311,6 +311,94 @@
     padding: 1px 5px; border-radius: 4px;
   }
   .reminder-hint > div + div { margin-top: 6px; }
+
+  .pot-cube-picker { display: flex; align-items: center; gap: 6px; }
+  .pot-cube-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 10px 4px 4px; cursor: pointer; color: var(--text-muted);
+    font-family: var(--sans); font-size: 12px; font-weight: 500;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .pot-cube-btn img { width: 22px; height: 22px; object-fit: contain; }
+  .pot-cube-btn:hover { color: var(--text); border-color: var(--text-muted); }
+  .pot-cube-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+  .pot-level-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pot-level-btn {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 0; flex: 1 1 0; min-width: 40px; cursor: pointer; color: var(--text-muted);
+    font-family: var(--mono); font-size: 13px; font-weight: 500; text-align: center;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .pot-level-btn:hover { color: var(--text); border-color: var(--text-muted); }
+  .pot-level-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+  .pot-form { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; }
+  .pot-field { display: flex; flex-direction: column; gap: 6px; }
+  .pot-field .num-input { width: 100%; }
+  .pot-sale-toggle {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    color: var(--text); cursor: pointer; user-select: none;
+  }
+  .pot-hint {
+    padding: 12px 18px; border-top: 1px solid var(--border);
+    font-size: 12px; line-height: 1.6; color: var(--text-muted); font-family: var(--sans);
+  }
+  .pot-hint code {
+    font-family: var(--mono); font-size: 11px; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .pot-conditions-label { padding: 0 18px 10px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .pot-optionsets { display: flex; flex-direction: column; gap: 12px; padding: 0 18px 12px; }
+  .pot-optionset {
+    position: relative; display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+  }
+  .pot-condition-row { display: flex; align-items: center; gap: 8px; }
+  .pot-condition-row .pot-cond-family { flex: 1 1 auto; min-width: 0; }
+  .pot-condition-row .pot-cond-value { width: 80px; flex: 0 0 auto; }
+  .pot-condition-row .pot-cond-value:disabled { opacity: 0.4; }
+  .pot-optionset-remove {
+    position: absolute; top: -8px; right: -8px; width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 50%;
+    color: var(--text-muted); cursor: pointer; font-size: 11px; line-height: 1;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .pot-optionset-remove:hover { color: var(--red); border-color: var(--red); }
+  .pot-result-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; }
+  .pot-result-line + .pot-result-line { border-top: 1px solid var(--border); }
+  .pot-result-total {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    font-weight: 600; color: var(--accent);
+  }
+  .pot-details-btn { margin-top: 10px; }
+  .pot-details-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    align-items: center; justify-content: center; z-index: 1000; padding: 24px;
+  }
+  .pot-details-overlay.open { display: flex; }
+  .pot-details-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    width: min(520px, 100%); max-height: min(640px, 90vh);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .pot-details-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .pot-details-header strong { font-size: 14px; color: var(--text); }
+  .pot-details-close {
+    background: none; border: none; color: var(--text-muted); font-size: 18px;
+    cursor: pointer; line-height: 1; padding: 2px 4px;
+  }
+  .pot-details-close:hover { color: var(--text); }
+  .pot-details-body { flex: 1; overflow-y: auto; padding: 8px 16px; }
+  #potResultWrap { padding: 16px 18px; }
+  .pot-detail-row { padding: 10px 0; }
+  .pot-detail-row + .pot-detail-row { border-top: 1px solid var(--border); }
+  .pot-detail-row .pot-detail-lines { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .pot-detail-row .pot-detail-prob { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .event-body { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
   .event-summary {
     font-size: 13px; color: var(--text); margin-bottom: 14px;
@@ -331,6 +419,7 @@
   <button class="tab-btn active" id="tabBtnParser" onclick="showTab('parser')">Stat Parser</button>
   <button class="tab-btn" id="tabBtnEvent" onclick="showTab('event')">Event Optimizer</button>
   <button class="tab-btn" id="tabBtnReminders" onclick="showTab('reminders')">Reminders</button>
+  <button class="tab-btn" id="tabBtnPotential" onclick="showTab('potential')">Potential Calculator</button>
 
   <div class="sidebar-divider"></div>
   <div class="sidebar-section-label">Other Resources</div>
@@ -599,17 +688,108 @@ Boss Damage	40	3.725%
 </div>
 </div>
 
+<div class="view" id="potentialView" style="display:none">
+<div class="toolbar">
+  <span class="toolbar-title">🔮 Potential Cube Calculator</span>
+
+  <span class="input-label">Cube</span>
+  <div class="pot-cube-picker" id="potCubePicker"></div>
+  <select id="potCubeSelect" style="display:none" onchange="onPotInputChange()"></select>
+
+  <div class="divider"></div>
+
+  <span class="input-label">Preset</span>
+  <select class="num-input" id="potPresetSelect" style="width:160px" onchange="loadPotentialPreset()"></select>
+  <button class="btn-ghost" onclick="promptSavePotentialPreset()">Save Preset</button>
+  <button class="btn-ghost" onclick="promptDeletePotentialPreset()">Delete</button>
+
+  <span class="error-inline" id="potErrorBar"></span>
+
+  <div class="spacer"></div>
+</div>
+
+<div class="body">
+  <div class="left-col" style="grid-template-rows: auto">
+    <div class="panel">
+      <div class="panel-label">Inputs</div>
+      <div class="pot-form">
+        <div class="pot-field">
+          <span class="input-label">Item level</span>
+          <div class="pot-level-picker" id="potLevelPicker"></div>
+          <input id="potLevelInput" type="number" value="160" style="display:none">
+        </div>
+
+        <div class="pot-field" id="potFromGradeField">
+          <span class="input-label">Grade being rerolled</span>
+          <select class="num-input" id="potFromGradeSelect" onchange="onPotInputChange()">
+            <option value="RARE">Rare</option>
+            <option value="EPIC">Epic</option>
+            <option value="UNIQUE">Unique</option>
+            <option value="LEGENDARY">Legendary</option>
+          </select>
+        </div>
+
+        <div class="pot-field" id="potCategoryField">
+          <span class="input-label">Equipment category</span>
+          <select class="num-input" id="potCategorySelect" onchange="onPotInputChange()"></select>
+        </div>
+
+        <div class="pot-field" id="potManualCostField">
+          <span class="input-label">Cost per cube (mesos)</span>
+          <input class="num-input" id="potManualCostInput" type="number" min="0" step="1" oninput="onPotInputChange()">
+        </div>
+
+        <label class="pot-sale-toggle">
+          <input type="checkbox" id="potCubeSaleToggle" onchange="onPotInputChange()">
+          Cube Sale (25% off)
+        </label>
+      </div>
+
+      <div class="pot-conditions-label">Option sets — any ONE set below is a win; a set needs ALL its lines together (max 3, one item slot each). Each target is a total across all 3 slots, however it's split — e.g. Attack % ≥ 30 counts 12+9+9, or 12+12+6, or one line that high on its own.</div>
+      <div class="pot-optionsets" id="potOptionSetsWrap"></div>
+      <button class="btn-ghost" id="potAddSetBtn" style="margin:0 18px 16px" onclick="addPotOptionSet()">+ Add option set</button>
+
+      <div class="pot-hint" id="potExactHint">
+        Uses GMS-specific line probabilities and value tables (StrategyWiki), resolved for your item's own level, combined with this cube's per-slot grade-match rate — the real math, not an approximation. A STR/DEX/INT/LUK target also counts a matching All Stat roll toward its total. Add multiple option sets to see the chance of landing any one of them — e.g. "30 Attack% alone, OR 23 Attack% + 40% Boss Damage together".
+      </div>
+
+      <button class="btn-primary" id="potCalculateBtn" style="margin:16px 18px" onclick="calculatePotResult()">Calculate →</button>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="col-header">
+      <div class="panel-label">Expected Value</div>
+    </div>
+    <div class="table-scroll" id="potResultWrap">
+      <div class="empty-state">Fill in the inputs and click Calculate to see expected cubes and cost.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="pot-details-overlay" id="potDetailsOverlay" onclick="if (event.target === this) closePotDetails()">
+  <div class="pot-details-modal">
+    <div class="pot-details-header">
+      <strong>Probability breakdown</strong>
+      <button class="pot-details-close" onclick="closePotDetails()">✕</button>
+    </div>
+    <div class="pot-details-body" id="potDetailsBody"></div>
+  </div>
+</div>
+
 <script type="module">
-import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES } from "./maple-constants/index.js";
+import { CLASS_NAMES, CLASS_STATS, STAT_TYPES, EVENT_CONFIGS, EVENT_NAMES, POTENTIAL_CUBES, POTENTIAL_CUBE_KEYS, POTENTIAL_LINES, POTENTIAL_EQUIP_CATEGORIES } from "./maple-constants/index.js";
 import { parse, splitColumns } from "./maple-parser.js";
 import { optimizeEvent, computeWeeklyIncome, estimateCurrentWeek, computeMarginalSteps } from "./maple-event-optimizer.js";
+import { computeOptionSetsHitPlan, listFamilies, familyDisplayName } from "./maple-potential-calc.js";
 
 // ── tabs + URL routing ─────────────────────────────────────────────────────
 // Each tab gets its own URL via the hash (e.g. #reminders). The hash never
 // leaves the browser, so there's no server-side path for GitHub Pages (or any
 // static host) to 404 on — a refresh or direct link always just loads
 // index.html normally, and this script picks the right tab from the hash.
-const TAB_SLUGS = { parser: "parser", event: "event-optimizer", reminders: "reminders" };
+const TAB_SLUGS = { parser: "parser", event: "event-optimizer", reminders: "reminders", potential: "potential-calc" };
 
 function tabFromLocation() {
   const hash = window.location.hash.replace(/^#\/?/, "");
@@ -620,9 +800,11 @@ function applyTab(tab) {
   document.getElementById("parserView").style.display    = tab === "parser"    ? "" : "none";
   document.getElementById("eventView").style.display      = tab === "event"     ? "" : "none";
   document.getElementById("remindersView").style.display  = tab === "reminders" ? "" : "none";
+  document.getElementById("potentialView").style.display  = tab === "potential" ? "" : "none";
   document.getElementById("tabBtnParser").classList.toggle("active", tab === "parser");
   document.getElementById("tabBtnEvent").classList.toggle("active", tab === "event");
   document.getElementById("tabBtnReminders").classList.toggle("active", tab === "reminders");
+  document.getElementById("tabBtnPotential").classList.toggle("active", tab === "potential");
   if (tab === "event") {
     reseedLinesTable();
     maybeAutoOpenHelp();
@@ -630,6 +812,9 @@ function applyTab(tab) {
   if (tab === "reminders") {
     refreshTimestampPreviews();
     updateReminderPreview();
+  }
+  if (tab === "potential") {
+    initPotentialTab();
   }
 }
 
@@ -1916,6 +2101,400 @@ window.promptDeleteReminderTemplate = function () {
   saveReminderTemplates(templates);
   populateReminderTemplateSelects();
 };
+
+// ── potential calculator ─────────────────────────────────────────────────────
+const POTENTIAL_STORAGE_KEY = "maplePotentialState";
+let potentialInitialized = false;
+
+function displayCubeLabel(key) {
+  return POTENTIAL_CUBES[key].label;
+}
+
+function gradeLabel(grade) {
+  return grade.charAt(0) + grade.slice(1).toLowerCase();
+}
+
+const POT_CUBE_ICONS = {
+  RED: "assets/Cash_Glowing_Cube.png",
+  POTENTIAL: "assets/Cash_Bright_Cube.png",
+};
+
+function populatePotentialCubeSelect() {
+  const select = document.getElementById("potCubeSelect");
+  select.innerHTML = POTENTIAL_CUBE_KEYS.map(
+    (key) => `<option value="${key}">${displayCubeLabel(key)}</option>`
+  ).join("");
+  if (!select.value) select.value = POTENTIAL_CUBE_KEYS[0];
+  renderPotCubePicker();
+}
+
+function renderPotCubePicker() {
+  const picker = document.getElementById("potCubePicker");
+  const current = document.getElementById("potCubeSelect").value;
+  picker.innerHTML = POTENTIAL_CUBE_KEYS.map((key) => `
+    <button type="button" class="pot-cube-btn${key === current ? " active" : ""}" onclick="selectPotCube('${key}')">
+      <img src="${POT_CUBE_ICONS[key]}" alt="">
+      <span>${displayCubeLabel(key)}</span>
+    </button>`).join("");
+}
+
+window.selectPotCube = function (key) {
+  const select = document.getElementById("potCubeSelect");
+  if (select.value === key) return;
+  select.value = key;
+  onPotInputChange();
+};
+
+function currentPotCube() {
+  const key = document.getElementById("potCubeSelect").value;
+  return { key, cube: POTENTIAL_CUBES[key] };
+}
+
+function showPotError(msg) {
+  const bar = document.getElementById("potErrorBar");
+  bar.textContent = "⚠ " + msg;
+  bar.classList.add("visible");
+}
+function clearPotError() {
+  document.getElementById("potErrorBar")?.classList.remove("visible");
+}
+
+function formatMesos(n) {
+  if (!Number.isFinite(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return (n / 1e12).toFixed(3) + "T mesos";
+  if (abs >= 1e9) return (n / 1e9).toFixed(3) + "B mesos";
+  if (abs >= 1e6) return (n / 1e6).toFixed(3) + "M mesos";
+  return Math.round(n).toLocaleString("en-US") + " mesos";
+}
+
+function formatCubes(n) {
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function populateCategoryOptions() {
+  const select = document.getElementById("potCategorySelect");
+  const prior = select.value;
+  select.innerHTML = Object.entries(POTENTIAL_EQUIP_CATEGORIES)
+    .map(([key, label]) => `<option value="${key}">${label}</option>`)
+    .join("");
+  if (POTENTIAL_EQUIP_CATEGORIES[prior]) select.value = prior;
+}
+
+// ── potential calculator: option sets ───────────────────────────────────────
+// Matches mesu.live's UX: any number of "option sets", each with up to 3
+// target lines (family + "at least this good" minValue) that must ALL land
+// together — the tool reports the chance of landing ANY one set (OR across
+// sets, AND within a set). Each set is always exactly 3 rows; an empty row
+// has family "" ("Select option") and doesn't count toward that set.
+let potOptionSets = [];
+
+function emptyPotRow() { return { family: "", minValue: 0 }; }
+function emptyPotSet() { return [emptyPotRow(), emptyPotRow(), emptyPotRow()]; }
+
+function currentCategoryData() {
+  const { key } = currentPotCube();
+  const category = document.getElementById("potCategorySelect").value;
+  return POTENTIAL_LINES[key]?.[category];
+}
+
+const POT_ITEM_LEVELS = [100, 140, 150, 160, 200, 250];
+
+function renderPotLevelPicker() {
+  const picker = document.getElementById("potLevelPicker");
+  const current = currentItemLevel();
+  picker.innerHTML = POT_ITEM_LEVELS.map((lvl) => `
+    <button type="button" class="pot-level-btn${lvl === current ? " active" : ""}" onclick="selectPotLevel(${lvl})">${lvl}</button>`
+  ).join("");
+}
+
+window.selectPotLevel = function (level) {
+  const input = document.getElementById("potLevelInput");
+  if (parseInt(input.value, 10) === level) return;
+  input.value = level;
+  onPotInputChange();
+};
+
+function currentItemLevel() {
+  return parseInt(document.getElementById("potLevelInput").value, 10) || 0;
+}
+
+function currentFamilyOptions() {
+  const { cube } = currentPotCube();
+  const grade = document.getElementById("potFromGradeSelect").value;
+  return listFamilies(currentCategoryData(), grade, currentItemLevel(), cube);
+}
+
+/** Blanks any row whose family no longer exists for the current
+ * cube/category/grade (e.g. switching from Weapon to Ring drops Attack-family
+ * targets), and seeds one set with one filled row if every set ends up empty. */
+function reconcilePotOptionSets() {
+  const families = currentFamilyOptions();
+  const byFamily = new Set(families.map((f) => f.family));
+  potOptionSets = potOptionSets.map((set) =>
+    set.map((row) => (row.family === "" || byFamily.has(row.family) ? row : emptyPotRow()))
+  );
+  const isAllEmpty = potOptionSets.every((set) => set.every((row) => row.family === ""));
+  if ((potOptionSets.length === 0 || isAllEmpty) && families.length) {
+    potOptionSets = [[{ family: families[0].family, minValue: families[0].maxValue }, emptyPotRow(), emptyPotRow()]];
+  }
+}
+
+function renderPotOptionSets() {
+  const wrap = document.getElementById("potOptionSetsWrap");
+  const families = currentFamilyOptions();
+  const familyOptionsHtml = (selected) => `<option value=""${selected === "" ? " selected" : ""}>Select option</option>` +
+    families.map((f) => `<option value="${f.family}"${f.family === selected ? " selected" : ""}>${familyDisplayName(f.family)}</option>`).join("");
+
+  wrap.innerHTML = potOptionSets.map((set, si) => `
+    <div class="pot-optionset">
+      ${potOptionSets.length > 1 ? `<button class="pot-optionset-remove" title="Remove this option set" onclick="removePotOptionSet(${si})">✕</button>` : ""}
+      ${set.map((row, ri) => `
+        <div class="pot-condition-row">
+          <select class="num-input pot-cond-family" onchange="setPotOptionSetFamily(${si}, ${ri}, this.value)">
+            ${familyOptionsHtml(row.family)}
+          </select>
+          <input class="num-input pot-cond-value" type="number" step="any" value="${row.minValue}" ${row.family === "" ? "disabled" : ""} oninput="setPotOptionSetValue(${si}, ${ri}, this.value)">
+        </div>`).join("")}
+    </div>`).join("");
+}
+
+window.addPotOptionSet = function () {
+  potOptionSets.push(emptyPotSet());
+  renderPotOptionSets();
+  onPotOptionSetsChanged();
+};
+
+window.removePotOptionSet = function (si) {
+  potOptionSets.splice(si, 1);
+  renderPotOptionSets();
+  onPotOptionSetsChanged();
+};
+
+window.setPotOptionSetFamily = function (si, ri, family) {
+  const row = potOptionSets[si][ri];
+  const wasBlank = row.family === "";
+  row.family = family;
+  if (family === "") {
+    row.minValue = 0;
+  } else if (wasBlank || row.family !== family) {
+    const info = currentFamilyOptions().find((f) => f.family === family);
+    row.minValue = info ? info.maxValue : row.minValue;
+  }
+  renderPotOptionSets();
+  onPotOptionSetsChanged();
+};
+
+window.setPotOptionSetValue = function (si, ri, value) {
+  potOptionSets[si][ri].minValue = parseFloat(value) || 0;
+  onPotOptionSetsChanged();
+};
+
+function onPotOptionSetsChanged() {
+  savePotentialState();
+}
+
+function describeSet(targets) {
+  return targets.map((t) => `${familyDisplayName(t.family)} ≥ ${t.minValue}`).join(" + ");
+}
+
+let lastPotResult = null;
+
+window.calculatePotResult = function () {
+  const wrap = document.getElementById("potResultWrap");
+  const { cube } = currentPotCube();
+  const itemLevel = currentItemLevel();
+  const rawManualCost = parseFloat(document.getElementById("potManualCostInput").value) || 0;
+  const saleOn = document.getElementById("potCubeSaleToggle").checked;
+  const manualCost = saleOn ? rawManualCost * 0.75 : rawManualCost;
+  const grade = document.getElementById("potFromGradeSelect").value;
+
+  clearPotError();
+
+  try {
+    const categoryData = currentCategoryData();
+    const optionSets = potOptionSets.map((set) =>
+      set.filter((row) => row.family !== "").map((row) => ({ family: row.family, minValue: row.minValue }))
+    );
+    const result = computeOptionSetsHitPlan({ cube, categoryData, grade, optionSets, itemLevel, manualCost });
+    lastPotResult = result;
+
+    const setRows = result.perSet.map(({ targets, probAlone }) => `
+      <div class="pot-result-line">
+        <span>${describeSet(targets)}</span>
+        <span>${(probAlone * 100).toFixed(8)}%</span>
+      </div>`).join("");
+
+    wrap.innerHTML = `
+      ${setRows}
+      <div class="pot-result-line">
+        <span>Chance to hit ANY option set per reset</span>
+        <span>${(result.probPerAttempt * 100).toFixed(8)}%</span>
+      </div>
+      <div class="pot-result-line pot-result-total">
+        <span>Total expected</span>
+        <span>${formatCubes(result.expectedAttempts)} cubes · ${formatMesos(result.expectedCost)}</span>
+      </div>
+      <button class="btn-ghost pot-details-btn" onclick="openPotDetails()">Details</button>`;
+  } catch (err) {
+    lastPotResult = null;
+    wrap.innerHTML = '<div class="empty-state">Fill in at least one target line and click Calculate to see expected cubes and cost.</div>';
+    showPotError(err.message);
+  }
+};
+
+window.openPotDetails = function () {
+  if (!lastPotResult) return;
+  const body = document.getElementById("potDetailsBody");
+  body.innerHTML = lastPotResult.combinations.map(({ lines, prob }) => `
+    <div class="pot-detail-row">
+      <div class="pot-detail-lines">${lines.join(" / ")}</div>
+      <div class="pot-detail-prob">${(prob * 100).toFixed(8)}%</div>
+    </div>`).join("");
+  document.getElementById("potDetailsOverlay").classList.add("open");
+};
+
+window.closePotDetails = function () {
+  document.getElementById("potDetailsOverlay").classList.remove("open");
+};
+
+window.onPotInputChange = function () {
+  const { key, cube } = currentPotCube();
+
+  renderPotCubePicker();
+  renderPotLevelPicker();
+  populateCategoryOptions();
+  reconcilePotOptionSets();
+  renderPotOptionSets();
+
+  const manualInput = document.getElementById("potManualCostInput");
+  if (!manualInput.dataset.editedFor || manualInput.dataset.editedFor !== key) {
+    manualInput.value = cube.defaultManualCost ?? 0;
+    manualInput.dataset.editedFor = key;
+  }
+
+  savePotentialState();
+};
+
+function savePotentialState() {
+  try {
+    localStorage.setItem(POTENTIAL_STORAGE_KEY, JSON.stringify({
+      cube: document.getElementById("potCubeSelect")?.value,
+      level: document.getElementById("potLevelInput")?.value,
+      fromGrade: document.getElementById("potFromGradeSelect")?.value,
+      manualCost: document.getElementById("potManualCostInput")?.value,
+      saleOn: document.getElementById("potCubeSaleToggle")?.checked,
+      category: document.getElementById("potCategorySelect")?.value,
+      optionSets: potOptionSets,
+    }));
+  } catch {}
+}
+
+function loadPotentialState() {
+  try {
+    const raw = localStorage.getItem(POTENTIAL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+// ── potential calculator: named presets ─────────────────────────────────────
+const POTENTIAL_PRESETS_KEY = "maplePotentialPresets";
+
+function loadPotentialPresets() {
+  try {
+    const raw = localStorage.getItem(POTENTIAL_PRESETS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function savePotentialPresets(presets) {
+  try { localStorage.setItem(POTENTIAL_PRESETS_KEY, JSON.stringify(presets)); } catch {}
+}
+
+function populatePotentialPresetSelect(selectedName = "") {
+  const select = document.getElementById("potPresetSelect");
+  if (!select) return;
+  const names = Object.keys(loadPotentialPresets()).sort((a, b) => a.localeCompare(b));
+  select.innerHTML = `<option value="">— Load preset —</option>` +
+    names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  select.value = names.includes(selectedName) ? selectedName : "";
+}
+
+/** Snapshots the current form as a preset — same shape as the auto-saved
+ * state, so applyPotentialState() can restore either one. */
+function currentPotentialSnapshot() {
+  return {
+    cube: document.getElementById("potCubeSelect")?.value,
+    level: document.getElementById("potLevelInput")?.value,
+    fromGrade: document.getElementById("potFromGradeSelect")?.value,
+    manualCost: document.getElementById("potManualCostInput")?.value,
+    saleOn: document.getElementById("potCubeSaleToggle")?.checked,
+    category: document.getElementById("potCategorySelect")?.value,
+    optionSets: potOptionSets,
+  };
+}
+
+window.promptSavePotentialPreset = function () {
+  const name = prompt("Save current Potential Calculator setup as:")?.trim();
+  if (!name) return;
+
+  const presets = loadPotentialPresets();
+  if (presets[name] && !confirm(`Overwrite existing preset "${name}"?`)) return;
+
+  presets[name] = currentPotentialSnapshot();
+  savePotentialPresets(presets);
+  populatePotentialPresetSelect(name);
+};
+
+window.loadPotentialPreset = function () {
+  const name = document.getElementById("potPresetSelect")?.value;
+  if (!name) return;
+  const preset = loadPotentialPresets()[name];
+  if (!preset) return;
+
+  applyPotentialState(preset);
+  populatePotentialPresetSelect(name);
+};
+
+window.promptDeletePotentialPreset = function () {
+  const select = document.getElementById("potPresetSelect");
+  const name = select?.value;
+  if (!name) return;
+  if (!confirm(`Delete preset "${name}"?`)) return;
+
+  const presets = loadPotentialPresets();
+  delete presets[name];
+  savePotentialPresets(presets);
+  populatePotentialPresetSelect();
+};
+
+/** Applies a saved potential-calculator state (from localStorage or a named
+ * preset) to the form. Falls back to whatever's already there for any field
+ * the state doesn't define. */
+function applyPotentialState(state) {
+  if (state?.cube && POTENTIAL_CUBES[state.cube]) document.getElementById("potCubeSelect").value = state.cube;
+  if (state?.level) document.getElementById("potLevelInput").value = state.level;
+  if (state?.fromGrade) document.getElementById("potFromGradeSelect").value = state.fromGrade;
+  if (state?.manualCost) document.getElementById("potManualCostInput").value = state.manualCost;
+  document.getElementById("potCubeSaleToggle").checked = !!state?.saleOn;
+
+  populateCategoryOptions();
+  if (state?.category) document.getElementById("potCategorySelect").value = state.category;
+
+  potOptionSets = Array.isArray(state?.optionSets) ? state.optionSets : [];
+  reconcilePotOptionSets();
+
+  window.onPotInputChange();
+}
+
+function initPotentialTab() {
+  if (potentialInitialized) return;
+  potentialInitialized = true;
+
+  populatePotentialCubeSelect();
+  populatePotentialPresetSelect();
+  applyPotentialState(loadPotentialState());
+}
 
 populateEventSelect();
 updateFdStatusChip();

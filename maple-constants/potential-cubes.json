@@ -1,0 +1,14 @@
+{
+  "RED": {
+    "label": "Glowing Cube",
+    "costModel": "manual",
+    "defaultManualCost": 12000000,
+    "slotGradeMatch": { "slot1": 1, "slot2": 0.10, "slot3": 0.01 }
+  },
+  "POTENTIAL": {
+    "label": "Bright Cube",
+    "costModel": "manual",
+    "defaultManualCost": 22000000,
+    "slotGradeMatch": { "slot1": 1, "slot2": 0.20, "slot3": 0.05 }
+  }
+}
